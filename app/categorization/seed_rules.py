@@ -37,7 +37,7 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Ocio y viajes", "Cine, teatro y espectáculos", BudgetGroup.DESEO, False, False, False),
     ("Ocio y viajes", "Hotel y alojamiento", BudgetGroup.DESEO, False, False, False),
     ("Ocio y viajes", "Libros, música y videojuegos", BudgetGroup.DESEO, False, False, False),
-    ("Otros gastos", "Cajeros", None, False, False, False),
+    ("Otros gastos", "Cajeros", BudgetGroup.DESEO, False, False, False),  # ocio: bares que solo cobran en efectivo
     ("Otros gastos", "Gasto Bizum", BudgetGroup.DESEO, False, False, False),
     ("Otros gastos", "Otros préstamos y avales", BudgetGroup.NECESIDAD, False, True, False),
     ("Otros gastos", "Pago de impuestos", BudgetGroup.NECESIDAD, False, True, True),
