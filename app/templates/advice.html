@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Consejos{% endblock %}
+{% block content %}
+  <h1>Consejos — {{ month_name }} {{ year }}</h1>
+
+  {% if sin_datos %}
+    <p>Todavía no hay movimientos. Ve a <a href="/conexiones">Conexiones</a> para conectar tu banco.</p>
+  {% elif not advices %}
+    <p>Sin avisos este mes — todo dentro de lo esperado.</p>
+  {% else %}
+    <ul class="advice-list">
+      {% for a in advices %}
+        <li class="advice advice-{{ a.severity }}">
+          <strong>{{ a.title }}</strong>
+          <p>{{ a.message }}</p>
+          {% if a.url %}<p><a href="{{ a.url }}">Ir a presupuestos &raquo;</a></p>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endblock %}

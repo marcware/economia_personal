@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Autotraspasos{% endblock %}
+{% block content %}
+  <h1>Posibles traspasos entre tus cuentas</h1>
+  <p>
+    Movimientos con importe opuesto y fecha cercana en cuentas distintas — pueden ser dinero
+    moviéndose entre tus propias cuentas (no cuentan como ingreso/gasto real) o coincidencias.
+    Confírmalos o recházalos.
+  </p>
+
+  {% if not pendientes %}
+    <p>No hay candidatos pendientes. 🎉</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr><th>Lado A</th><th>Lado B</th><th>Días de diferencia</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for c in pendientes %}
+          <tr>
+            <td>
+              {{ c.transaction.date.strftime('%d/%m/%Y') }} — {{ c.transaction.account.name }}<br>
+              <strong>{{ "%.2f"|format(c.transaction.amount) }} €</strong> — {{ c.transaction.description_raw }}
+            </td>
+            <td>
+              {{ c.matched_transaction.date.strftime('%d/%m/%Y') }} — {{ c.matched_transaction.account.name }}<br>
+              <strong>{{ "%.2f"|format(c.matched_transaction.amount) }} €</strong> — {{ c.matched_transaction.description_raw }}
+            </td>
+            <td>{{ c.days_apart }}</td>
+            <td>
+              <form method="post" action="/autotraspasos/{{ c.id }}/confirmar" style="display:inline">
+                <button type="submit" class="button-sm">Confirmar traspaso</button>
+              </form>
+              <form method="post" action="/autotraspasos/{{ c.id }}/rechazar" style="display:inline">
+                <button type="submit" class="button-sm" style="background:#888">No es traspaso</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

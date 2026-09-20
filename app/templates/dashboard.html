@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+  <h1>Dashboard</h1>
+
+  {% if sin_datos %}
+    <p>Todavía no hay movimientos. Ve a <a href="/conexiones">Conexiones</a> para conectar tu banco y sincronizar.</p>
+  {% else %}
+    <div class="month-nav">
+      {% if prev_month %}
+        <a href="/dashboard?year={{ prev_month[0] }}&month={{ prev_month[1] }}">&laquo; anterior</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+      <h2>{{ summary.month_name }} {{ summary.year }}</h2>
+      {% if next_month %}
+        <a href="/dashboard?year={{ next_month[0] }}&month={{ next_month[1] }}">siguiente &raquo;</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Ingresado</div>
+        <div class="card-value positive">{{ "%.2f"|format(summary.ingresos) }} €</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Gastado</div>
+        <div class="card-value negative">{{ "%.2f"|format(summary.gastos) }} €</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Ahorrado</div>
+        <div class="card-value {{ 'positive' if summary.ahorro >= 0 else 'negative' }}">
+          {{ "%.2f"|format(summary.ahorro) }} €
+          {% if summary.tasa_ahorro is not none %}
+            <span class="card-sub">({{ summary.tasa_ahorro }}% de los ingresos)</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-box">
+        <h3>Gasto por categoría</h3>
+        <canvas id="chartCategorias"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Evolución (12 meses)</h3>
+        <canvas id="chartEvolucion"></canvas>
+      </div>
+    </div>
+
+    {% if advices %}
+      <h3>Consejos destacados</h3>
+      <ul class="advice-list">
+        {% for a in advices %}
+          <li class="advice advice-{{ a.severity }}">
+            <strong>{{ a.title }}</strong>
+            <p>{{ a.message }}</p>
+            {% if a.url %}<p><a href="{{ a.url }}">Ir a presupuestos &raquo;</a></p>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      <p><a href="/consejos?year={{ summary.year }}&month={{ summary.month }}">Ver todos los consejos &raquo;</a></p>
+    {% endif %}
+
+    <h3>Top categorías de gasto</h3>
+    <table>
+      <thead><tr><th>Categoría</th><th>Importe</th></tr></thead>
+      <tbody>
+        {% for c in top_categorias %}
+          <tr><td>{{ c.categoria }}</td><td>{{ "%.2f"|format(c.importe) }} €</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <script src="/static/js/chart.min.js"></script>
+    <script>
+      const categorias = {{ top_categorias | tojson }};
+      new Chart(document.getElementById('chartCategorias'), {
+        type: 'doughnut',
+        data: {
+          labels: categorias.map(c => c.categoria),
+          datasets: [{ data: categorias.map(c => c.importe) }],
+        },
+      });
+
+      const trend = {{ trend | tojson }};
+      new Chart(document.getElementById('chartEvolucion'), {
+        type: 'bar',
+        data: {
+          labels: trend.map(t => t.label),
+          datasets: [
+            { label: 'Ingresos', data: trend.map(t => t.ingresos), backgroundColor: '#0a6e4e' },
+            { label: 'Gastos', data: trend.map(t => t.gastos), backgroundColor: '#b3261e' },
+          ],
+        },
+      });
+    </script>
+  {% endif %}
+{% endblock %}

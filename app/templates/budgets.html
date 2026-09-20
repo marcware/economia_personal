@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}Presupuestos{% endblock %}
+
+{% macro fila_presupuesto(f) %}
+  <tr>
+    <td>{{ f.etiqueta }}</td>
+    <td>
+      {{ "%.2f"|format(f.gasto) }} € /
+      <form method="post" action="/presupuestos" class="inline-form" style="display:inline">
+        <input type="hidden" name="category_id" value="{{ f.budget.category_id }}">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="number" step="0.01" name="monthly_limit"
+               value="{{ "%.2f"|format(f.limite) }}" style="width:6rem">
+        <button type="submit" class="button-sm">Guardar</button>
+      </form>
+      <div class="progress-bar">
+        <div class="progress-fill {{ f.estado }}" style="width: {{ [f.ratio, 100]|min }}%"></div>
+      </div>
+    </td>
+    <td>{{ "%.2f"|format(f.restante) }} €</td>
+    <td>{{ f.ratio|round(0, 'floor')|int }}%</td>
+    <td>
+      <form method="post" action="/presupuestos/{{ f.budget.id }}/eliminar">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="button-sm" style="background:#888">Quitar</button>
+      </form>
+    </td>
+  </tr>
+{% endmacro %}
+
+{% macro tabla_presupuestos(grupo) %}
+  <table>
+    <thead>
+      <tr><th>Categoría</th><th>Gasto / Límite</th><th>Restante</th><th>%</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for f in grupo.filas %}{{ fila_presupuesto(f) }}{% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th>Subtotal</th>
+        <th>{{ "%.2f"|format(grupo.total_gasto) }} € / {{ "%.2f"|format(grupo.total_limite) }} €</th>
+        <th>{{ "%.2f"|format(grupo.total_restante) }} €</th>
+        <th>{{ grupo.ratio_total|round(0, 'floor')|int }}%</th>
+        <th></th>
+      </tr>
+    </tfoot>
+  </table>
+{% endmacro %}
+
+{% macro tabla_sin_presupuesto(filas, texto_boton) %}
+  <table>
+    <thead><tr><th>Categoría</th><th>Gasto</th><th></th></tr></thead>
+    <tbody>
+      {% for s in filas %}
+        <tr>
+          <td>{{ s.etiqueta }}</td>
+          <td>{{ "%.2f"|format(s.gasto) }} €</td>
+          <td>
+            <form method="post" action="/presupuestos" class="inline-form">
+              <input type="hidden" name="category_id" value="{{ s.categoria.id }}">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="month" value="{{ month }}">
+              <input type="number" step="0.01" name="monthly_limit"
+                     value="{{ "%.2f"|format(s.gasto) }}" style="width:6rem">
+              <button type="submit" class="button-sm">{{ texto_boton }}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% block content %}
+  <h1>Presupuestos mensuales</h1>
+
+  <div class="month-nav">
+    {% if prev_month %}
+      <a href="/presupuestos?year={{ prev_month[0] }}&month={{ prev_month[1] }}">&laquo; anterior</a>
+    {% else %}
+      <span></span>
+    {% endif %}
+    <h2>{{ month_name }} {{ year }}</h2>
+    {% if next_month %}
+      <a href="/presupuestos?year={{ next_month[0] }}&month={{ next_month[1] }}">siguiente &raquo;</a>
+    {% else %}
+      <span></span>
+    {% endif %}
+  </div>
+
+  {% if not resumen.filas %}
+    <section>
+      <h2>Presupuestos de {{ month_name|lower }}</h2>
+      <p>Todavía no has fijado ningún presupuesto para este mes.
+         Puedes copiarlo de otro mes más abajo.</p>
+    </section>
+  {% else %}
+    <section>
+      <h2>🔒 Gastos fijos</h2>
+      <p class="muted">Compromisos recurrentes, el mismo importe (más o menos) todos los meses.
+         Aquí no se recorta: se revisa que siga siendo correcto y se paga.</p>
+      {% if resumen.fijos.filas %}
+        {{ tabla_presupuestos(resumen.fijos) }}
+      {% else %}
+        <p class="muted">Ninguno presupuestado todavía.</p>
+      {% endif %}
+    </section>
+
+    <section>
+      <h2>✂️ Gastos variables</h2>
+      <p class="muted">Gasto de comportamiento: cambia según lo que hagas este mes.
+         Si quieres ahorrar más, aquí es donde hay margen para recortar.</p>
+      {% if resumen.variables.filas %}
+        {{ tabla_presupuestos(resumen.variables) }}
+      {% else %}
+        <p class="muted">Ninguno presupuestado todavía.</p>
+      {% endif %}
+    </section>
+
+    <section>
+      <table>
+        <tfoot>
+          <tr>
+            <th>Total del mes</th>
+            <th>{{ "%.2f"|format(resumen.total_gasto) }} € / {{ "%.2f"|format(resumen.total_limite) }} €</th>
+            <th>{{ "%.2f"|format(resumen.total_restante) }} €</th>
+            <th>{{ resumen.ratio_total|round(0, 'floor')|int }}%</th>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  {% endif %}
+
+  {% if resumen.sin_presupuesto_fijos %}
+    <section>
+      <h2>Fijos sin presupuestar</h2>
+      <p class="muted">Tuvieron gasto en {{ month_name|lower }} y son recurrentes, pero no tienen límite fijado.</p>
+      {{ tabla_sin_presupuesto(resumen.sin_presupuesto_fijos, "Presupuestar") }}
+    </section>
+  {% endif %}
+
+  {% if resumen.sin_presupuesto_variables %}
+    <section>
+      <h2>Variables sin presupuestar</h2>
+      <p class="muted">Tuvieron gasto en {{ month_name|lower }} para las que no has fijado límite.</p>
+      {{ tabla_sin_presupuesto(resumen.sin_presupuesto_variables, "Presupuestar") }}
+    </section>
+  {% endif %}
+
+  {% if gastos_anuales %}
+    <section>
+      <h2>📅 Gastos anuales</h2>
+      <p class="muted">Caen en bloque una o dos veces al año (seguros, IBI...), no repartidos cada mes.
+         Si un mes concreto sale caro por uno de estos, es lo esperado, no un sobrecoste.
+         El "estimado anual" sale de tu gasto real de los últimos 12 meses.</p>
+      <table>
+        <thead><tr><th>Categoría</th><th>Gastado en {{ year }}</th><th>Estimado anual</th><th>Queda por gastar</th></tr></thead>
+        <tbody>
+          {% for g in gastos_anuales %}
+            <tr>
+              <td>{{ g.etiqueta }}</td>
+              <td>{{ "%.2f"|format(g.gastado_año) }} €</td>
+              <td>{{ "%.2f"|format(g.estimado_anual) }} €</td>
+              <td>
+                {{ "%.2f"|format(g.restante) }} €
+                {% if g.por_mes_restante %}
+                  <span class="muted">(~{{ "%.2f"|format(g.por_mes_restante) }} €/mes en lo que queda de año)</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
+  <section>
+    <h2>Hitos de {{ month_name|lower }}</h2>
+    {% if not hitos %}
+      <p class="muted">Sin hitos este mes. Un hito es un objetivo concreto que la app vigila
+         y sobre el que te avisa en <a href="/consejos">Consejos</a>.</p>
+    {% else %}
+      <table>
+        <thead><tr><th>Hito</th><th>Objetivo</th><th>Vas por</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          {% for h in hitos %}
+            <tr>
+              <td>{{ h.titulo }}</td>
+              <td>{{ h.etiqueta_objetivo }}</td>
+              <td>
+                {% if h.actual is none %}
+                  <span class="muted">sin datos</span>
+                {% else %}
+                  {{ "%.2f"|format(h.actual) }} {{ h.unidad }}
+                  <div class="progress-bar">
+                    <div class="progress-fill {{ h.estado }}" style="width: {{ [h.ratio, 100]|min }}%"></div>
+                  </div>
+                {% endif %}
+              </td>
+              <td><span class="badge">{{ h.estado }}</span></td>
+              <td>
+                <form method="post" action="/presupuestos/hitos/{{ h.goal.id }}/eliminar">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  <input type="hidden" name="month" value="{{ month }}">
+                  <button type="submit" class="button-sm" style="background:#888">Quitar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <h3>Añadir hito</h3>
+    <form method="post" action="/presupuestos/hitos" class="inline-form">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="month" value="{{ month }}">
+      <select name="goal_type" id="goal-type" required>
+        <option value="" disabled selected>Tipo de hito…</option>
+        {% for t in tipos_hito %}
+          <option value="{{ t.valor }}" data-categoria="{{ 1 if t.necesita_categoria else 0 }}">{{ t.etiqueta }}</option>
+        {% endfor %}
+      </select>
+      <select name="category_id" id="goal-categoria" hidden>
+        <option value="">(todas las de ahorro)</option>
+        {% for c in todas_categorias %}
+          <option value="{{ c.id }}">{{ c.parent.name }} · {{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" step="0.01" name="target_amount" placeholder="Objetivo" required style="width:7rem">
+      <input type="text" name="title" placeholder="Nombre (opcional)">
+      <button type="submit" class="button-sm">Añadir hito</button>
+    </form>
+    <script>
+      (function () {
+        var tipo = document.getElementById('goal-type');
+        var cat = document.getElementById('goal-categoria');
+        tipo.addEventListener('change', function () {
+          var opt = tipo.options[tipo.selectedIndex];
+          cat.hidden = opt.dataset.categoria !== '1';
+        });
+      })();
+    </script>
+  </section>
+
+  <section>
+    <h2>Añadir presupuesto</h2>
+    <form method="post" action="/presupuestos" class="inline-form">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="month" value="{{ month }}">
+      <select name="category_id" required>
+        <option value="" disabled selected>Elegir categoría…</option>
+        {% for c in categorias_disponibles %}
+          <option value="{{ c.id }}">{{ c.parent.name }} · {{ c.name }} {{ "(fijo)" if c.recurrente else "" }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" step="0.01" name="monthly_limit" placeholder="Límite mensual (€)" required>
+      <button type="submit" class="button-sm">Añadir</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Copiar de otro mes</h2>
+    <form method="post" action="/presupuestos/copiar" class="inline-form">
+      <input type="hidden" name="destino_year" value="{{ year }}">
+      <input type="hidden" name="destino_month" value="{{ month }}">
+      <select name="origen" required onchange="
+        this.form.origen_year.value = this.value.split('-')[0];
+        this.form.origen_month.value = this.value.split('-')[1];">
+        <option value="" disabled selected>Copiar desde…</option>
+        {% for m in meses_copiables %}
+          <option value="{{ m[0] }}-{{ m[1] }}">{{ meses_es[m[1]] }} {{ m[0] }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="origen_year" value="">
+      <input type="hidden" name="origen_month" value="">
+      <label><input type="checkbox" name="sobrescribir" value="true"> Sobrescribir los que ya existan</label>
+      <button type="submit" class="button-sm">Copiar a {{ month_name|lower }} (presupuestos e hitos)</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Objetivo 50/30/20</h2>
+    <form method="post" action="/presupuestos/ajustes" class="inline-form">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="month" value="{{ month }}">
+      <label>Necesidades <input type="number" step="1" name="needs_pct" value="{{ settings.needs_pct }}" style="width:4rem"> %</label>
+      <label>Deseos <input type="number" step="1" name="wants_pct" value="{{ settings.wants_pct }}" style="width:4rem"> %</label>
+      <label>Ahorro <input type="number" step="1" name="savings_pct" value="{{ settings.savings_pct }}" style="width:4rem"> %</label>
+      <button type="submit" class="button-sm">Guardar</button>
+    </form>
+  </section>
+{% endblock %}

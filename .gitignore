@@ -1,0 +1,20 @@
+# Entorno Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Datos y secretos locales — nunca deben subirse al repo
+data/*.db
+data/*.db-journal
+secrets/
+.env
+ING/
+*.pem
+*.xls
+*.xlsx
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Categorías{% endblock %}
+{% block content %}
+  <h1>Categorías y reglas</h1>
+
+  {% for parent in parents %}
+    <section>
+      <h2>{{ parent.name }}</h2>
+      {% for sub in parent.children|sort(attribute='name') %}
+        <div class="category-block">
+          <h3>
+            {{ sub.name }}
+            <span class="tag">{{ sub.budget_group.value if sub.budget_group else 'sin grupo' }}</span>
+            {% if sub.is_transfer_category %}<span class="tag">traspaso</span>{% endif %}
+          </h3>
+          {% set rules = rules_by_category.get(sub.id, []) %}
+          {% if rules %}
+            <table>
+              <thead><tr><th>Patrón</th><th>Regex</th><th>Signo</th><th>Prioridad</th><th>Usos</th><th>Origen</th><th></th></tr></thead>
+              <tbody>
+                {% for r in rules %}
+                  <tr class="{{ '' if r.active else 'inactive-row' }}">
+                    <td>{{ r.pattern }}</td>
+                    <td>{{ 'sí' if r.is_regex else 'no' }}</td>
+                    <td>{{ r.amount_sign.value }}</td>
+                    <td>{{ r.priority }}</td>
+                    <td>{{ r.match_count }}</td>
+                    <td>{{ 'aprendida' if r.created_from_correction else 'semilla' }}</td>
+                    <td>
+                      {% if r.active %}
+                        <form method="post" action="/categorias/regla/{{ r.id }}/desactivar">
+                          <button type="submit" class="button-sm" style="background:#888">Desactivar</button>
+                        </form>
+                      {% else %}
+                        <form method="post" action="/categorias/regla/{{ r.id }}/activar">
+                          <button type="submit" class="button-sm">Activar</button>
+                        </form>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="muted">Sin reglas todavía.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </section>
+  {% endfor %}
+
+  <section>
+    <h2>Añadir subcategoría</h2>
+    <form method="post" action="/categorias/subcategoria" class="inline-form">
+      <select name="parent_id" required>
+        {% for p in parents %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="name" placeholder="Nombre de la subcategoría" required>
+      <select name="budget_group">
+        <option value="">Sin grupo</option>
+        {% for g in budget_groups %}
+          <option value="{{ g.value }}">{{ g.value }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="button-sm">Crear</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Añadir regla de categorización</h2>
+    <form method="post" action="/categorias/regla" class="inline-form">
+      <input type="text" name="pattern" placeholder="Patrón (texto o regex)" required>
+      <select name="category_id" required>
+        {% for c in all_subcategories %}
+          <option value="{{ c.id }}">{{ c.parent.name }} · {{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="amount_sign">
+        {% for s in amount_signs %}
+          <option value="{{ s.value }}">{{ s.value }}</option>
+        {% endfor %}
+      </select>
+      <label class="checkbox-label"><input type="checkbox" name="is_regex" value="true"> es regex</label>
+      <button type="submit" class="button-sm">Crear</button>
+    </form>
+  </section>
+{% endblock %}

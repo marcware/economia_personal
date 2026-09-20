@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Conexiones{% endblock %}
+{% block content %}
+  <h1>Conexiones bancarias</h1>
+
+  <section>
+    <h2>Conectar un banco</h2>
+    <ul class="connect-list">
+      {% for key, aspsp in aspsps.items() %}
+        <li>
+          <a class="button" href="/conexiones/conectar/{{ key }}">Conectar con {{ aspsp.name }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section>
+    <h2>Consentimientos activos</h2>
+    {% if not connections %}
+      <p>Todavía no has conectado ningún banco.</p>
+    {% else %}
+      <table>
+        <thead>
+          <tr><th>Banco</th><th>Estado</th><th>Consentimiento válido hasta</th></tr>
+        </thead>
+        <tbody>
+          {% for c in connections %}
+            <tr>
+              <td>{{ c.aspsp_name }}</td>
+              <td>{{ c.status.value }}</td>
+              <td>
+                {% if c.consent_valid_until %}
+                  {{ c.consent_valid_until.strftime('%d/%m/%Y') }}
+                  {% if c.consent_valid_until < now.replace(tzinfo=None) %}
+                    <strong>(caducado, reautoriza)</strong>
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Cuentas vinculadas</h2>
+    {% if not accounts %}
+      <p>Sin cuentas todavía.</p>
+    {% else %}
+      <table>
+        <thead>
+          <tr><th>Banco</th><th>Nombre</th><th>IBAN</th></tr>
+        </thead>
+        <tbody>
+          {% for a in accounts %}
+            <tr>
+              <td>{{ a.bank.value }}</td>
+              <td>{{ a.name }}</td>
+              <td>{{ a.iban or '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
+{% endblock %}

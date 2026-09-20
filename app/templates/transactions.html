@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Movimientos{% endblock %}
+{% block content %}
+  <h1>Movimientos</h1>
+  <p><a href="/movimientos/agrupados">Categorizar pendientes agrupados por comercio &raquo;</a></p>
+
+  <form method="get" action="/movimientos" class="filters">
+    <select name="categoria">
+      <option value="" {{ 'selected' if not categoria }}>Todas las categorías</option>
+      <option value="sin_clasificar" {{ 'selected' if categoria == 'sin_clasificar' }}>Sin clasificar</option>
+      {% for c in categories %}
+        {% if c.parent_id %}
+          <option value="{{ c.id }}" {{ 'selected' if categoria == c.id|string }}>
+            {{ c.parent.name }} · {{ c.name }}
+          </option>
+        {% endif %}
+      {% endfor %}
+    </select>
+    <select name="cuenta">
+      <option value="">Todas las cuentas</option>
+      {% for a in accounts %}
+        <option value="{{ a.id }}" {{ 'selected' if cuenta == a.id }}>{{ a.name }} ({{ a.iban }})</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="texto" placeholder="Buscar en descripción…" value="{{ texto }}">
+    <button type="submit" class="button-sm">Filtrar</button>
+  </form>
+
+  <p>{{ total }} movimiento(s)</p>
+
+  <table>
+    <thead>
+      <tr><th>Fecha</th><th>Descripción</th><th>Importe</th><th>Categoría</th></tr>
+    </thead>
+    <tbody>
+      {% for t in transactions %}
+        <tr>
+          <td>{{ t.date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ t.description_raw }}</td>
+          <td class="{{ 'positive' if t.amount > 0 else 'negative' }}">{{ "%.2f"|format(t.amount) }} €</td>
+          <td>
+            <form method="post" action="/movimientos/categorizar" class="inline-form">
+              <input type="hidden" name="transaction_id" value="{{ t.id }}">
+              <input type="hidden" name="redirect_to"
+                     value="/movimientos?categoria={{ categoria }}&cuenta={{ cuenta or '' }}&texto={{ texto }}&page={{ page }}">
+              <select name="category_id" required>
+                <option value="" disabled {{ 'selected' if not t.category_id }}>Elegir…</option>
+                {% for c in categories %}
+                  {% if c.parent_id %}
+                    <option value="{{ c.id }}" {{ 'selected' if t.category_id == c.id }}>
+                      {{ c.parent.name }} · {{ c.name }}
+                    </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              <label class="checkbox-label">
+                <input type="checkbox" name="apply_to_similar" value="true" checked>
+                aplicar a similares
+              </label>
+              <button type="submit" class="button-sm">Guardar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    {% if page > 1 %}
+      <a href="/movimientos?categoria={{ categoria }}&cuenta={{ cuenta or '' }}&texto={{ texto }}&page={{ page - 1 }}">&laquo; anterior</a>
+    {% endif %}
+    <span>Página {{ page }} de {{ total_pages }}</span>
+    {% if page < total_pages %}
+      <a href="/movimientos?categoria={{ categoria }}&cuenta={{ cuenta or '' }}&texto={{ texto }}&page={{ page + 1 }}">siguiente &raquo;</a>
+    {% endif %}
+  </div>
+{% endblock %}

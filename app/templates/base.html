@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Economía Personal{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Economía Personal</a>
+    <nav>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/patrimonio">Patrimonio</a>
+      <a href="/conexiones">Conexiones</a>
+      <a href="/movimientos">Movimientos</a>
+      <a href="/consejos">Consejos</a>
+      <a href="/presupuestos">Presupuestos</a>
+      <a href="/categorias">Categorías</a>
+      {% set n_traspasos = pending_transfer_candidates_count() %}
+      <a href="/autotraspasos">Autotraspasos{% if n_traspasos > 0 %} <span class="badge">{{ n_traspasos }}</span>{% endif %}</a>
+      <a href="/notas">Notas</a>
+    </nav>
+  </header>
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

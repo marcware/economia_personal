@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Notas financieras{% endblock %}
+{% block content %}
+  <h1>Notas financieras</h1>
+  <p>Conclusiones, hallazgos y decisiones del análisis de tu economía — para que no se pierdan en el chat.</p>
+
+  <form method="post" action="/notas" class="note-form">
+    <input type="text" name="title" placeholder="Título" required>
+    <textarea name="content" rows="4" placeholder="Contenido…" required></textarea>
+    <button type="submit" class="button-sm">Guardar nota</button>
+  </form>
+
+  {% if not notas %}
+    <p>Todavía no hay notas.</p>
+  {% else %}
+    <div class="notes-list">
+      {% for n in notas %}
+        <article class="note">
+          <div class="note-header">
+            <strong>{{ n.title }}</strong>
+            <span class="note-date">{{ n.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          </div>
+          <div class="note-content">{{ n.content }}</div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

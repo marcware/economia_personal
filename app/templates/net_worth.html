@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Patrimonio{% endblock %}
+{% block content %}
+  <h1>Patrimonio neto</h1>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Patrimonio neto</div>
+      <div class="card-value {{ 'positive' if summary.net_worth >= 0 else 'negative' }}">
+        {{ "%.2f"|format(summary.net_worth) }} €
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cuentas bancarias</div>
+      <div class="card-value positive">{{ "%.2f"|format(summary.total_accounts) }} €</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Inversiones declaradas</div>
+      <div class="card-value positive">{{ "%.2f"|format(summary.total_assets) }} €</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Deudas pendientes</div>
+      <div class="card-value negative">{{ "%.2f"|format(summary.total_liabilities) }} €</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Cuentas bancarias (saldo real, vía API)</h2>
+    <table>
+      <thead><tr><th>Cuenta</th><th>Saldo</th><th>Actualizado</th></tr></thead>
+      <tbody>
+        {% for a in summary.accounts %}
+          <tr>
+            <td>{{ a.account.bank.value }} · {{ a.account.name }}</td>
+            <td>{{ "%.2f"|format(a.balance) }} €</td>
+            <td>{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Inversiones declaradas</h2>
+    <table>
+      <thead><tr><th>Nombre</th><th>Valor</th><th>Actualizado</th></tr></thead>
+      <tbody>
+        {% for a in summary.assets %}
+          <tr><td>{{ a.name }}</td><td>{{ "%.2f"|format(a.value) }} €</td><td>{{ a.recorded_at.strftime('%d/%m/%Y') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form method="post" action="/patrimonio/activo" class="inline-form">
+      <input type="text" name="name" placeholder="Nombre (p.ej. PIAS, Fondos, BIT2ME)" required>
+      <input type="number" step="0.01" name="value" placeholder="Valor actual (€)" required>
+      <button type="submit" class="button-sm">Guardar</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Deudas pendientes</h2>
+    <table>
+      <thead><tr><th>Nombre</th><th>Capital pendiente</th><th>Actualizado</th></tr></thead>
+      <tbody>
+        {% for l in summary.liabilities %}
+          <tr><td>{{ l.name }}</td><td>{{ "%.2f"|format(l.value) }} €</td><td>{{ l.recorded_at.strftime('%d/%m/%Y') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form method="post" action="/patrimonio/pasivo" class="inline-form">
+      <input type="text" name="name" placeholder="Nombre (p.ej. Hipoteca, Préstamo)" required>
+      <input type="number" step="0.01" name="outstanding_balance" placeholder="Capital pendiente (€)" required>
+      <button type="submit" class="button-sm">Guardar</button>
+    </form>
+  </section>
+{% endblock %}
