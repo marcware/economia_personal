@@ -2,6 +2,12 @@
 patrones identificados a mano revisando las descripciones reales. Crea reglas permanentes
 (is_regex donde hace falta) y recategoriza retroactivamente.
 
+Además de RULES (patrón de texto -> categoría), AMOUNT_RULES resuelve los pocos casos
+donde dos conceptos distintos comparten la misma descripción genérica del banco y solo
+se distinguen por el importe exacto (p.ej. 'Transferencia emitida periódica' es a la vez
+la cuota de comunidad y el traspaso a Bit2Me) — el motor de reglas normal no puede
+expresar eso, así que se asigna directamente sobre las transacciones sin categorizar.
+
 Uso:
     python scripts/bulk_categorize_pending.py
 """
@@ -165,6 +171,34 @@ RULES: list[tuple[str, bool, str, str]] = [
     ("PNP*ZACATRUS", False, "Ocio y viajes", "Libros, música y videojuegos"),
     ("TECNO ESPORT", False, "Compras", "Compras (otros)"),
     ("ALMACENES REY DON JAIME", False, "Compras", "Compras (otros)"),
+    # --- Tercera pasada (revisión de los 311 pendientes) ---
+    ("DEPORVILLAGE", False, "Compras", "Compras (otros)"),
+    ("IBERLIBRO", False, "Compras", "Compras (otros)"),
+    ("ATENEO COMICS", False, "Compras", "Compras (otros)"),
+    ("AELIA DUTY FREE", False, "Compras", "Compras (otros)"),
+    ("SP BARCA LICENS", False, "Compras", "Compras (otros)"),
+    ("ECOCAMP", False, "Ocio y viajes", "Hotel y alojamiento"),
+    ("CONVENTO DE MINIMOS", False, "Ocio y viajes", "Hotel y alojamiento"),
+    ("OFICINA DEL PEREGRINO", False, "Ocio y viajes", "Cine, teatro y espectáculos"),
+    ("CATEDRAL DE", False, "Ocio y viajes", "Cine, teatro y espectáculos"),
+    (r"^(PLK|APK)\d", True, "Vehículo y transporte", "Gasolina y combustible"),
+    ("AUTOGRILL", False, "Vehículo y transporte", "Gasolina y combustible"),
+    ("AREAS ", False, "Vehículo y transporte", "Gasolina y combustible"),
+    ("EMPRESA MIXTA DE TRAFICO", False, "Vehículo y transporte", "Gasolina y combustible"),
+    ("FISIO ", False, "Educación y salud", "Farmacia, herbolario y nutrición"),
+    ("ABONO DE PRESTAMO", False, "Otros gastos", "Otros préstamos y avales"),
+    ("COMISION SIEMPRE CUBIERTO", False, "Otros gastos", "Suscripciones"),
+]
+
+# (descripción normalizada exacta, importe exacto, categoría, subcategoría). No son
+# CategorizationRule (el motor no distingue por importe) — se asignan directamente y
+# solo sobre transacciones que sigan sin categorizar, para no pisar nada ya corregido.
+AMOUNT_RULES: list[tuple[str, float, str, str]] = [
+    # Confirmado contra el Excel: Comunidad es 30€/mes constante, Bit2Me 25€/mes constante,
+    # ambos ininterrumpidos en todo el histórico. El -50€ de la misma descripción (7 pagos,
+    # ene-jul 2025, ya cerrado) se deja sin decidir — no hay con qué contrastarlo.
+    ("TRANSFERENCIA EMITIDA PERIODICA", -30.0, "Otros gastos", "Pago de impuestos"),
+    ("TRANSFERENCIA EMITIDA PERIODICA", -25.0, "Inversión", "Otras inversiones"),
 ]
 
 
@@ -211,6 +245,24 @@ def main() -> None:
                 categorizadas += 1
         db.commit()
         print(f"Recategorizadas {categorizadas} de {len(pendientes)} transacciones pendientes.")
+
+        asignadas_por_importe = 0
+        for descripcion, importe, categoria, subcategoria in AMOUNT_RULES:
+            category_id = get_category_id(db, categorias_cache, categoria, subcategoria)
+            filas = (
+                db.query(Transaction)
+                .filter(
+                    Transaction.category_id.is_(None),
+                    Transaction.description_normalized == descripcion,
+                    Transaction.amount == importe,
+                )
+                .all()
+            )
+            for tx in filas:
+                tx.category_id = category_id
+                asignadas_por_importe += 1
+        db.commit()
+        print(f"{asignadas_por_importe} transacciones asignadas por importe exacto (AMOUNT_RULES).")
     finally:
         db.close()
 

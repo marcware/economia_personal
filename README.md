@@ -1,40 +1,86 @@
 # Economía Personal
 
-App local para revisar tu economía personal: dashboard mensual de ingresos/gastos por categoría y un motor de consejos tipo "coach financiero". Los movimientos se traen desde ING vía la API de [Enable Banking](https://enablebanking.com) (Open Banking / PSD2) — nada de exportar CSVs a mano.
+App local para revisar tu economía personal: dashboard mensual de ingresos/gastos por categoría,
+presupuestos mensuales con hitos, patrimonio neto y un "coach financiero" que avisa de desvíos. Los
+movimientos de ING llegan solos vía [Enable Banking](https://enablebanking.com) (Open Banking/PSD2) —
+nada de exportar CSVs a mano; Mediolanum se importa a mano de un Excel de vez en cuando (tiene pocos
+movimientos, no compensa automatizarlo).
 
-## Puesta en marcha
+Guía técnica para quien programe esto (yo con Claude Code) en `CLAUDE.md`. Esto de aquí es la guía de
+uso del día a día.
+
+## Arrancar
+
+```bash
+cd ~/Develop/Marcos/economia_personal
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000 \
+  --ssl-keyfile secrets/localhost.key --ssl-certfile secrets/localhost.crt
+```
+
+Abre **https://localhost:8000**. El navegador avisará de "conexión no segura" — es el certificado
+autofirmado, normal en local; acepta el aviso una vez por sesión de navegador.
+
+El `--reload` es importante: sin él, si se toca código con el servidor ya arrancado, la web sigue
+sirviendo el código viejo y puede dar error 500 aunque el fichero en disco ya esté arreglado. Con
+`--reload` puesto, cualquier cambio se recoge solo.
+
+## Parar
+
+`Ctrl+C` en la terminal donde está corriendo. Si lo lanzaste en segundo plano y no encuentras la
+terminal:
+
+```bash
+pkill -f "uvicorn app.main:app"
+```
+
+## Tareas habituales
+
+Todas se ejecutan con el entorno activado (`source .venv/bin/activate`) desde la raíz del proyecto.
+
+| Quiero... | Comando |
+|---|---|
+| Traer movimientos nuevos de ING | `python scripts/sync_accounts.py` |
+| Importar un Excel nuevo de Mediolanum | `python scripts/import_mediolanum.py ruta/al/fichero.xlsx` |
+| Ver un resumen del mes por terminal (lo que uso yo para revisar tus cuentas) | `python scripts/informe_mensual.py [año] [mes]` (sin argumentos, el mes en curso) |
+| Cargar presupuestos de un mes desde la plantilla anual | `python scripts/seed_presupuestos.py <año> <mes> --con-variables --dry-run` primero para revisar, luego sin `--dry-run` |
+| Aplicar cambios de base de datos tras una actualización | `alembic upgrade head` |
+
+Categorizar movimientos pendientes se hace desde la propia web, en **Movimientos → Categorizar
+pendientes agrupados por comercio** — asigna una categoría una vez y se aplica también a los futuros.
+
+## Instalación desde cero (otro ordenador, o si se corrompe el entorno)
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # y rellena las credenciales de Enable Banking
-uvicorn app.main:app --reload --port 8000 \
-  --ssl-keyfile secrets/localhost.key --ssl-certfile secrets/localhost.crt
+cp .env.example .env              # y rellena tus credenciales de Enable Banking (ver abajo)
+alembic upgrade head              # crea/actualiza data/economia.db
+python scripts/seed_categories.py # categorías y reglas de partida
 ```
 
-Abre https://localhost:8000 (el navegador avisará de "conexión no segura" por ser un certificado autofirmado — es normal en local, acepta el aviso una vez).
+Luego arranca normal (sección "Arrancar" arriba).
 
-Enable Banking exige que la redirect URL de una app en Production sea HTTPS incluso en localhost, por eso el servidor local también corre con TLS (certificado autofirmado en `secrets/localhost.{key,crt}`, generado con OpenSSL, gitignored).
+## Conectar un banco (ING vía Enable Banking)
 
-## Estado del proyecto
+Solo hace falta una vez, o cuando caduque el consentimiento (cada ~90 días, límite normativo PSD2 — la
+web avisa con "(caducado, reautoriza)" en **Conexiones**):
 
-En construcción — ver el plan en `/home/marcware/.claude/plans/vale-mira-quiero-eh-cosmic-sloth.md`. Fases:
+1. Cuenta gratuita en https://enablebanking.com y genera tu par de claves desde su Control Panel.
+2. Copia el `application_id` y la clave privada a `.env` / `secrets/` (nunca se suben al repo).
+3. Registra `https://localhost:8000/conexiones/callback` como redirect URL permitida.
+4. Desde `/conexiones`, "Conectar con ING" y autoriza iniciando sesión en tu banco.
 
-0. ✅ Andamiaje del proyecto
-1. Modelo de datos (SQLAlchemy + Alembic + categorías semilla)
-2. Cliente Enable Banking mínimo (confirmar cobertura de ING)
-3. Flujo de conexión (autorización con ING)
-4. Sincronización de movimientos
-5. Categorización automática
-6. Dashboard mensual
-7. CRUD (movimientos, categorías, presupuestos)
-8. Motor de consejos
-9. Pulido v1
+Bit2Me y Quanloop no se conectan como cuentas bancarias: se registran a mano en **Patrimonio →
+Inversiones declaradas** cada vez que quieras actualizar el valor (queda guardado el histórico, no solo
+el último dato).
 
-## Conectar con ING (cuando lleguemos a la Fase 2-3)
+## Si algo no va
 
-1. Crea una cuenta gratuita en https://enablebanking.com y genera tu par de claves/certificado desde su Control Panel.
-2. Copia el `application_id` y la clave privada a `.env` / `secrets/` (nunca se suben al repo, están en `.gitignore`).
-3. Registra `http://localhost:8000/conexiones/callback` como redirect URL permitido.
-4. Desde `/conexiones`, pulsa "Conectar con ING" y autoriza el acceso iniciando sesión en tu banco. El consentimiento hay que renovarlo cada ~90 días (límite normativo PSD2).
+- **Error 500 justo después de tocar código**: reinicia el servidor con `--reload` (ver arriba); si ya
+  lo tenía puesto, mira el mensaje de error en la terminal donde corre uvicorn.
+- **"Conexión no segura" en el navegador**: normal, es el certificado autofirmado de desarrollo — acepta
+  el aviso.
+- **Un banco pide reautorizar**: el consentimiento PSD2 caduca cada ~90 días, repite el paso 4 de
+  "Conectar un banco".
