@@ -65,8 +65,9 @@ def main(year: int, month: int) -> None:
         resumen_presupuestos = budget_summary(db, year, month)
         if resumen_presupuestos["filas"]:
             print("\nPresupuestos del mes:")
+            marcas = {"over": "!!", "near": " ~", "ok": "  ", "cumplido": " OK", "riesgo": " ~", "incumplido": "!!", "pendiente": " .."}
             for f in resumen_presupuestos["filas"]:
-                marca = {"over": "!!", "near": " ~", "ok": "  "}[f["estado"]]
+                marca = marcas.get(f["estado"], "  ")
                 print(
                     f"  {marca} {f['etiqueta']:45} {f['gasto']:>8.2f}€ / {f['limite']:>8.2f}€"
                     f"  ({f['ratio']:.0f}%)"

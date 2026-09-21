@@ -3,17 +3,21 @@
 
 {% macro fila_presupuesto(f) %}
   <tr>
-    <td>{{ f.etiqueta }}</td>
+    <td>{{ f.etiqueta }}{% if f.virtual %} <span class="muted">(compromiso, no editable aquí)</span>{% endif %}</td>
     <td>
-      {{ "%.2f"|format(f.gasto) }} € /
-      <form method="post" action="/presupuestos" class="inline-form" style="display:inline">
-        <input type="hidden" name="category_id" value="{{ f.budget.category_id }}">
-        <input type="hidden" name="year" value="{{ year }}">
-        <input type="hidden" name="month" value="{{ month }}">
-        <input type="number" step="0.01" name="monthly_limit"
-               value="{{ "%.2f"|format(f.limite) }}" style="width:6rem">
-        <button type="submit" class="button-sm">Guardar</button>
-      </form>
+      {% if f.virtual %}
+        {{ "%.2f"|format(f.gasto) }} € / {{ "%.2f"|format(f.limite) }} €
+      {% else %}
+        {{ "%.2f"|format(f.gasto) }} € /
+        <form method="post" action="/presupuestos" class="inline-form" style="display:inline">
+          <input type="hidden" name="category_id" value="{{ f.budget.category_id }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="number" step="0.01" name="monthly_limit"
+                 value="{{ "%.2f"|format(f.limite) }}" style="width:6rem">
+          <button type="submit" class="button-sm">Guardar</button>
+        </form>
+      {% endif %}
       <div class="progress-bar">
         <div class="progress-fill {{ f.estado }}" style="width: {{ [f.ratio, 100]|min }}%"></div>
       </div>
@@ -21,11 +25,15 @@
     <td>{{ "%.2f"|format(f.restante) }} €</td>
     <td>{{ f.ratio|round(0, 'floor')|int }}%</td>
     <td>
-      <form method="post" action="/presupuestos/{{ f.budget.id }}/eliminar">
-        <input type="hidden" name="year" value="{{ year }}">
-        <input type="hidden" name="month" value="{{ month }}">
-        <button type="submit" class="button-sm" style="background:#888">Quitar</button>
-      </form>
+      {% if f.virtual %}
+        <span class="muted">ajustar en Hitos</span>
+      {% else %}
+        <form method="post" action="/presupuestos/{{ f.budget.id }}/eliminar">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <button type="submit" class="button-sm" style="background:#888">Quitar</button>
+        </form>
+      {% endif %}
     </td>
   </tr>
 {% endmacro %}
@@ -132,17 +140,11 @@
         </tfoot>
       </table>
       <p class="muted">
-        Esto es solo gasto (fijos + variables). La inversión no está aquí a propósito
-        (un presupuesto es un tope, e invertir más es bueno) — pero sigue siendo dinero
-        real que sale de la cuenta este mes:
+        El total ya incluye el compromiso de inversión (Bit2Me/Quanloop/ING), marcado
+        como "compromiso, no editable aquí" dentro de Fijos — es dinero real que sale de
+        la cuenta todos los meses, pero no un tope: invertir más nunca cuenta como
+        "presupuesto superado".
       </p>
-      <table>
-        <tbody>
-          <tr><td>Presupuesto (fijos + variables)</td><td>{{ "%.2f"|format(resumen.total_limite) }} €</td></tr>
-          <tr><td>+ Inversión esperada (Bit2Me/Quanloop/ING...)</td><td>{{ "%.2f"|format(resumen.inversion_esperada) }} €</td></tr>
-          <tr><th>= Total real que sale de la cuenta</th><th>{{ "%.2f"|format(resumen.total_real_mes) }} €</th></tr>
-        </tbody>
-      </table>
     </section>
   {% endif %}
 

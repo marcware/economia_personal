@@ -78,6 +78,7 @@ def budget_rows(
             "categoria": b.category,
             "etiqueta": f"{b.category.parent.name} · {b.category.name}",
             "recurrente": b.category.recurrente,
+            "virtual": False,
             "gasto": gasto,
             "limite": limite,
             "restante": limite - gasto,
@@ -135,15 +136,67 @@ def inversion_esperada(db: Session, year: int, month: int) -> float:
     return -float(total) / 12 if total else 0.0
 
 
+def _fila_inversion(db: Session, year: int, month: int, month_df: pd.DataFrame | None) -> dict | None:
+    """Fila "fija" para el compromiso de inversión (Bit2Me/Quanloop/ING...).
+
+    No es un Budget real —no tiene sentido capar la inversión, invertir más es bueno—
+    pero sigue siendo dinero que sale de la cuenta todos los meses igual que la hipoteca,
+    así que se muestra en Fijos para que el total del mes ya lo incluya sin tener que
+    sumarlo aparte. Al no ser un Budget, no pasa por budget_alerts: meter más de lo
+    esperado aquí nunca se marca como "presupuesto superado".
+    """
+    objetivo = inversion_esperada(db, year, month)
+    if objetivo <= 0:
+        return None
+
+    df = _month_df(db, year, month, month_df)
+    gastado = 0.0
+    if not df.empty:
+        gastado = -df.loc[(df["amount"] < 0) & (df["budget_group"] == "AHORRO"), "amount"].sum()
+
+    hoy = date.today()
+    if (year, month) > (hoy.year, hoy.month):
+        estado = "pendiente"
+    elif gastado >= objetivo:
+        estado = "cumplido"
+    elif (year, month) < (hoy.year, hoy.month):
+        estado = "incumplido"
+    else:
+        # Mes en curso: por debajo de lo esperado a estas alturas del mes -> aviso suave,
+        # nunca "over" (rojo de "te has pasado"), porque pasarse aquí es bueno.
+        estado = "riesgo" if gastado < objetivo * (hoy.day / 30) else "ok"
+
+    return {
+        "budget": None,
+        "categoria": None,
+        "etiqueta": "Inversión · Otras inversiones",
+        "recurrente": True,
+        "virtual": True,
+        "gasto": gastado,
+        "limite": objetivo,
+        "restante": max(objetivo - gastado, 0.0),
+        "ratio": min(gastado / objetivo * 100, 999) if objetivo > 0 else 0.0,
+        "estado": estado,
+    }
+
+
 def budget_summary(
     db: Session, year: int, month: int, month_df: pd.DataFrame | None = None
 ) -> dict:
-    """Resumen del mes: filas presupuestadas, totales y categorías con gasto sin presupuestar."""
+    """Resumen del mes: filas presupuestadas, totales y categorías con gasto sin presupuestar.
+
+    Incluye una fila "fija" para el compromiso de inversión (ver _fila_inversion) para que
+    el total del mes ya cuente con ella sin tener que sumarla aparte — es dinero real que
+    sale de la cuenta todos los meses, aunque no sea un Budget con tope.
+    """
     df = _month_df(db, year, month, month_df)
     filas = budget_rows(db, year, month, df)
+    fila_inversion = _fila_inversion(db, year, month, df)
+    if fila_inversion is not None:
+        filas = sorted([*filas, fila_inversion], key=lambda f: (not f["recurrente"], f["etiqueta"]))
     gastos = month_expense_by_category(db, year, month, df)
 
-    presupuestadas = {f["budget"].category_id for f in filas}
+    presupuestadas = {f["budget"].category_id for f in filas if f["budget"] is not None}
     sin_presupuesto = []
     for cid, gasto in sorted(gastos.items(), key=lambda kv: -kv[1]):
         if cid in presupuestadas:
@@ -182,8 +235,6 @@ def budget_summary(
         "sin_presupuesto": sin_presupuesto,
         "sin_presupuesto_fijos": [f for f in sin_presupuesto if f["recurrente"]],
         "sin_presupuesto_variables": [f for f in sin_presupuesto if not f["recurrente"]],
-        "inversion_esperada": (inv := inversion_esperada(db, year, month)),
-        "total_real_mes": totales["total_limite"] + inv,
     }
 
 

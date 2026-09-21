@@ -35,7 +35,7 @@ def presupuestos_home(
     hitos = goal_service.goal_rows(db, year, month)
     gastos_anuales = budget_service.gastos_anuales(db, year)
 
-    con_presupuesto = {f["budget"].category_id for f in resumen["filas"]}
+    con_presupuesto = {f["budget"].category_id for f in resumen["filas"] if f["budget"] is not None}
     categorias_disponibles = [
         c
         for c in db.query(Category).filter(Category.parent_id.isnot(None)).order_by(Category.name).all()
