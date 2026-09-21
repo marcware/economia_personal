@@ -13,7 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.advisor.data import load_transactions_df
-from app.models import Budget, BudgetGroup, Category, Transaction
+from app.models import Budget, BudgetGroup, Category, FinancialGoal, GoalType, Transaction
 from app.services.dashboard_service import MONTHS_ES, available_months
 
 # A partir de este ratio el presupuesto se marca como "cerca del límite".
@@ -100,6 +100,41 @@ def _subtotales(filas: list[dict]) -> dict:
     }
 
 
+def inversion_esperada(db: Session, year: int, month: int) -> float:
+    """Cuánto se espera que salga hacia ahorro/inversión este mes (Bit2Me, Quanloop, ING...).
+
+    No está en el presupuesto (los AHORRO no se capan, ver budget_summary), pero sigue
+    siendo dinero real que sale de la cuenta este mes — sin sumarlo aquí, el "total del
+    mes" del presupuesto parece más bajo de lo que de verdad hace falta tener disponible.
+
+    Prioridad: el objetivo del hito INVERSION_MIN de ese mes si existe (es la cifra que
+    el propio usuario se ha propuesto meter); si no hay hito, la media real de los
+    últimos 12 meses en categorías AHORRO, igual que gastos_anuales.
+    """
+    hito = (
+        db.query(FinancialGoal)
+        .filter_by(active=True, year=year, month=month, goal_type=GoalType.INVERSION_MIN)
+        .first()
+    )
+    if hito is not None:
+        return float(hito.target_amount)
+
+    hoy = date.today()
+    trailing_inicio = date(hoy.year - 1, hoy.month, hoy.day)
+    total = (
+        db.query(func.sum(Transaction.amount))
+        .join(Category, Category.id == Transaction.category_id)
+        .filter(
+            Category.budget_group == BudgetGroup.AHORRO,
+            Transaction.amount < 0,
+            Transaction.date >= trailing_inicio,
+            Transaction.date <= hoy,
+        )
+        .scalar()
+    )
+    return -float(total) / 12 if total else 0.0
+
+
 def budget_summary(
     db: Session, year: int, month: int, month_df: pd.DataFrame | None = None
 ) -> dict:
@@ -147,6 +182,8 @@ def budget_summary(
         "sin_presupuesto": sin_presupuesto,
         "sin_presupuesto_fijos": [f for f in sin_presupuesto if f["recurrente"]],
         "sin_presupuesto_variables": [f for f in sin_presupuesto if not f["recurrente"]],
+        "inversion_esperada": (inv := inversion_esperada(db, year, month)),
+        "total_real_mes": totales["total_limite"] + inv,
     }
 
 

@@ -131,6 +131,18 @@
           </tr>
         </tfoot>
       </table>
+      <p class="muted">
+        Esto es solo gasto (fijos + variables). La inversión no está aquí a propósito
+        (un presupuesto es un tope, e invertir más es bueno) — pero sigue siendo dinero
+        real que sale de la cuenta este mes:
+      </p>
+      <table>
+        <tbody>
+          <tr><td>Presupuesto (fijos + variables)</td><td>{{ "%.2f"|format(resumen.total_limite) }} €</td></tr>
+          <tr><td>+ Inversión esperada (Bit2Me/Quanloop/ING...)</td><td>{{ "%.2f"|format(resumen.inversion_esperada) }} €</td></tr>
+          <tr><th>= Total real que sale de la cuenta</th><th>{{ "%.2f"|format(resumen.total_real_mes) }} €</th></tr>
+        </tbody>
+      </table>
     </section>
   {% endif %}
 
