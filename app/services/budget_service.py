@@ -6,6 +6,7 @@ budget_alerts del coach y scripts/informe_mensual.py. Antes estaba duplicada en 
 router y en el advisor, con entradas ligeramente distintas.
 """
 
+import math
 from datetime import date
 
 import pandas as pd
@@ -21,6 +22,12 @@ UMBRAL_AVISO = 0.9
 
 # Cuántos meses futuros se pueden presupuestar por adelantado.
 MESES_FUTUROS_SELECCIONABLES = 3
+
+# Ajuste automático (ver ajustar_mes): ventana de meses que se mira hacia atrás, incluido
+# el mes en curso, y en cuántos de ellos tiene que haber gasto para añadir un presupuesto.
+# Pedir 2 meses evita que una compra puntual (un ordenador) cree un tope mensual.
+VENTANA_AJUSTE_MESES = 6
+MESES_CON_GASTO_PARA_AÑADIR = 2
 
 
 def _month_df(db: Session, year: int, month: int, month_df: pd.DataFrame | None) -> pd.DataFrame:
@@ -272,25 +279,41 @@ def selectable_months(db: Session) -> list[tuple[int, int]]:
 
 
 def upsert_budget(
-    db: Session, category_id: int, year: int, month: int, monthly_limit: float
+    db: Session,
+    category_id: int,
+    year: int,
+    month: int,
+    monthly_limit: float,
+    fijado: bool | None = None,
 ) -> Budget:
-    """Crea o actualiza el presupuesto de una categoría para un mes. Reactiva si estaba quitado."""
+    """Crea o actualiza el presupuesto de una categoría para un mes. Reactiva si estaba quitado.
+
+    `fijado=True` cuando es una decisión explícita del usuario sobre esa categoría (el
+    formulario de /presupuestos): a partir de ahí el ajuste automático no la toca. None
+    deja la marca como estaba (copias y plantillas en bloque).
+    """
     existing = db.query(Budget).filter_by(category_id=category_id, year=year, month=month).one_or_none()
     if existing is not None:
         existing.monthly_limit = monthly_limit
         existing.active = True
         budget = existing
     else:
-        budget = Budget(category_id=category_id, year=year, month=month, monthly_limit=monthly_limit)
+        budget = Budget(category_id=category_id, year=year, month=month, monthly_limit=monthly_limit, fijado=False)
         db.add(budget)
+    if fijado is not None:
+        budget.fijado = fijado
+        budget.ajuste_auto = None
     db.commit()
     return budget
 
 
 def deactivate_budget(db: Session, budget_id: int) -> None:
+    """Quitar a mano: queda fijado, para que el ajuste automático no lo vuelva a añadir."""
     budget = db.get(Budget, budget_id)
     if budget is not None:
         budget.active = False
+        budget.fijado = True
+        budget.ajuste_auto = None
         db.commit()
 
 
@@ -337,6 +360,143 @@ def seed_month(
         upsert_budget(db, category_id, year, month, float(limite))
         escritos += 1
     return escritos
+
+
+def _meses_atras(hoy: date, n: int) -> list[tuple[int, int]]:
+    """Los n meses naturales que acaban en el de `hoy` (incluido), del más antiguo al actual."""
+    meses = []
+    year, month = hoy.year, hoy.month
+    for _ in range(n):
+        meses.append((year, month))
+        year, month = (year - 1, 12) if month == 1 else (year, month - 1)
+    return meses[::-1]
+
+
+def _gasto_mensual_reciente(db: Session, hoy: date) -> dict[int, dict[tuple[int, int], float]]:
+    """{category_id: {(año, mes): gasto}} en la ventana de ajuste, solo meses con gasto."""
+    meses = _meses_atras(hoy, VENTANA_AJUSTE_MESES)
+    año_mes = func.strftime("%Y-%m", Transaction.date)
+    filas = (
+        db.query(Transaction.category_id, año_mes, func.sum(Transaction.amount))
+        .filter(
+            Transaction.category_id.isnot(None),
+            Transaction.amount < 0,
+            Transaction.date >= date(*meses[0], 1),
+            Transaction.date <= hoy,
+        )
+        .group_by(Transaction.category_id, año_mes)
+        .all()
+    )
+    gasto: dict[int, dict[tuple[int, int], float]] = {}
+    for category_id, ym, total in filas:
+        year, month = (int(x) for x in ym.split("-"))
+        gasto.setdefault(category_id, {})[(year, month)] = -float(total)
+    return gasto
+
+
+def _ajustable(categoria: Category) -> bool:
+    """Categorías que el ajuste automático puede añadir o quitar.
+
+    Fuera: traspasos, ahorro (no se capa, va como hito), ingresos, las ambiguas sin grupo
+    y las anuales — esas caen en su mes de vencimiento y se presupuestan solo ese mes
+    (plantilla de seed_presupuestos / gastos_anuales), no cada mes.
+    """
+    return (
+        categoria.parent_id is not None
+        and not categoria.is_transfer_category
+        and not categoria.anual
+        and categoria.budget_group in (BudgetGroup.NECESIDAD, BudgetGroup.DESEO)
+    )
+
+
+def _limite_sugerido(gasto_por_mes: dict[tuple[int, int], float]) -> float:
+    """Media mensual en la ventana (los meses sin gasto cuentan como 0), redondeada a 5 € hacia arriba.
+
+    Una media y no una mediana: en categorías esporádicas (el gato, ropa) la mediana es 0,
+    y la media es justo lo que cuestan al mes repartidas.
+    """
+    media = sum(gasto_por_mes.values()) / VENTANA_AJUSTE_MESES
+    return float(math.ceil(media / 5) * 5)
+
+
+def ajustar_mes(db: Session, year: int, month: int, hoy: date | None = None) -> dict[str, list[Budget]]:
+    """Mantiene vivo el presupuesto de un mes abierto (en curso o futuro) según el gasto reciente.
+
+    - Añade las categorías que han tenido gasto en al menos MESES_CON_GASTO_PARA_AÑADIR de
+      los últimos VENTANA_AJUSTE_MESES meses y no tienen presupuesto ese mes, con la media
+      mensual como límite.
+    - Quita las que no han tenido ningún gasto en toda la ventana.
+    - No recalcula los importes que ya hay: solo altas y bajas. Y no toca nada que el
+      usuario haya decidido a mano (Budget.fijado), ni meses pasados, ni meses que aún no
+      tengan ningún presupuesto preparado (no se inventa un mes entero).
+
+    Idempotente: se llama al abrir /presupuestos y la portada y tras sincronizar el banco.
+    Las altas y bajas quedan marcadas en Budget.ajuste_auto para mostrarlas y deshacerlas.
+    """
+    hoy = hoy or date.today()
+    cambios: dict[str, list[Budget]] = {"añadidos": [], "quitados": []}
+    if (year, month) < (hoy.year, hoy.month):
+        return cambios
+
+    filas = {b.category_id: b for b in db.query(Budget).filter_by(year=year, month=month).all()}
+    if not any(b.active for b in filas.values()):
+        return cambios
+
+    gasto = _gasto_mensual_reciente(db, hoy)
+    for categoria in db.query(Category).filter(Category.parent_id.isnot(None)).all():
+        if not _ajustable(categoria):
+            continue
+        budget = filas.get(categoria.id)
+        if budget is not None and budget.fijado:
+            continue
+        meses_con_gasto = gasto.get(categoria.id, {})
+
+        if (budget is None or not budget.active) and len(meses_con_gasto) >= MESES_CON_GASTO_PARA_AÑADIR:
+            limite = _limite_sugerido(meses_con_gasto)
+            if budget is None:
+                budget = Budget(category_id=categoria.id, year=year, month=month, fijado=False)
+                db.add(budget)
+            budget.monthly_limit = limite
+            budget.active = True
+            budget.ajuste_auto = "añadido"
+            cambios["añadidos"].append(budget)
+        elif budget is not None and budget.active and not meses_con_gasto:
+            budget.active = False
+            budget.ajuste_auto = "quitado"
+            cambios["quitados"].append(budget)
+
+    if cambios["añadidos"] or cambios["quitados"]:
+        db.commit()
+    return cambios
+
+
+def ajustar_meses_abiertos(db: Session, hoy: date | None = None) -> None:
+    """ajustar_mes sobre el mes en curso y todos los futuros que ya tengan presupuestos."""
+    hoy = hoy or date.today()
+    meses = db.query(Budget.year, Budget.month).distinct().all()
+    for year, month in meses:
+        if (year, month) >= (hoy.year, hoy.month):
+            ajustar_mes(db, year, month, hoy)
+
+
+def ajustes_automaticos(db: Session, year: int, month: int) -> list[Budget]:
+    """Presupuestos del mes cuya última alta o baja fue automática, para enseñarlos."""
+    return (
+        db.query(Budget)
+        .filter(Budget.year == year, Budget.month == month, Budget.ajuste_auto.isnot(None))
+        .all()
+    )
+
+
+def deshacer_ajuste(db: Session, budget_id: int) -> None:
+    """Revierte un ajuste automático y deja la decisión fijada para que no se repita."""
+    budget = db.get(Budget, budget_id)
+    if budget is None or budget.ajuste_auto is None:
+        return
+    budget.active = budget.ajuste_auto == "quitado"
+    budget.fijado = True
+    budget.ajuste_auto = None
+    db.commit()
 
 
 def _gasto_categoria_entre(db: Session, category_id: int, desde: date, hasta: date) -> float:

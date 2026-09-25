@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -30,6 +30,11 @@ class Budget(Base):
     month: Mapped[int] = mapped_column(Integer)  # 1-12
     monthly_limit: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # El usuario ha decidido a mano sobre esta categoría en este mes (la ha fijado, editado
+    # o quitado): el ajuste automático de budget_service.ajustar_mes ya no la toca.
+    fijado: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # "añadido" / "quitado" si la última alta o baja la hizo el ajuste automático; None si no.
+    ajuste_auto: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

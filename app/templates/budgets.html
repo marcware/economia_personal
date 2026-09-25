@@ -3,7 +3,8 @@
 
 {% macro fila_presupuesto(f) %}
   <tr>
-    <td>{{ f.etiqueta }}{% if f.virtual %} <span class="muted">(compromiso, no editable aquí)</span>{% endif %}</td>
+    <td>{{ f.etiqueta }}{% if f.virtual %} <span class="muted">(compromiso, no editable aquí)</span>{% endif %}
+      {%- if f.budget and f.budget.ajuste_auto == "añadido" %}<span class="tag" title="Añadido automáticamente por gasto reciente">auto</span>{% endif %}</td>
     <td>
       {% if f.virtual %}
         {{ "%.2f"|format(f.gasto) }} € / {{ "%.2f"|format(f.limite) }} €
@@ -98,6 +99,33 @@
       <span></span>
     {% endif %}
   </div>
+
+  {% if ajustes %}
+    <section>
+      <h2>🔄 Ajustes automáticos</h2>
+      <p class="muted">El presupuesto de los meses abiertos se adapta a tu gasto reciente: entra una
+         categoría con gasto en al menos 2 de los últimos 6 meses (con su media mensual como límite)
+         y sale la que lleva 6 meses sin gasto. Los importes que ya había no se tocan, ni nada que
+         hayas fijado, editado o quitado tú. Si deshaces un ajuste, no se vuelve a repetir.</p>
+      <table>
+        <tbody>
+          {% for b in ajustes %}
+            <tr>
+              <td>{{ b.category.parent.name }} · {{ b.category.name }}</td>
+              <td>{% if b.ajuste_auto == "añadido" %}añadido ({{ "%.2f"|format(b.monthly_limit) }} €){% else %}quitado: sin gasto en 6 meses{% endif %}</td>
+              <td>
+                <form method="post" action="/presupuestos/{{ b.id }}/deshacer-ajuste">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  <input type="hidden" name="month" value="{{ month }}">
+                  <button type="submit" class="button-sm" style="background:#888">Deshacer</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
 
   {% if not resumen.filas %}
     <section>

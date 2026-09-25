@@ -17,7 +17,7 @@ from app.routers import (
     transfer_candidates,
 )
 from app.database import get_db
-from app.services import disponible_service
+from app.services import budget_service, disponible_service
 from app.templating import templates
 
 APP_DIR = Path(__file__).resolve().parent
@@ -40,6 +40,7 @@ app.include_router(net_worth.router)
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Portada "Hoy": cuánto es libre hasta la nómina, para decidir antes de comprar."""
+    budget_service.ajustar_meses_abiertos(db)  # usa el presupuesto del mes del ciclo
     return templates.TemplateResponse(
         request, "home.html", {"d": disponible_service.disponible(db)}
     )

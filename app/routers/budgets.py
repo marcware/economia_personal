@@ -27,12 +27,15 @@ def presupuestos_home(
     if year is None or month is None or (year, month) not in meses:
         year, month = (hoy.year, hoy.month) if (hoy.year, hoy.month) in meses else meses[0]
 
+    budget_service.ajustar_meses_abiertos(db)
+
     idx = meses.index((year, month))
     prev_month = meses[idx + 1] if idx + 1 < len(meses) else None
     next_month = meses[idx - 1] if idx > 0 else None
 
     resumen = budget_service.budget_summary(db, year, month)
     hitos = goal_service.goal_rows(db, year, month)
+    ajustes = budget_service.ajustes_automaticos(db, year, month)
     gastos_anuales = budget_service.gastos_anuales(db, year)
 
     con_presupuesto = {f["budget"].category_id for f in resumen["filas"] if f["budget"] is not None}
@@ -55,6 +58,7 @@ def presupuestos_home(
         {
             "resumen": resumen,
             "hitos": hitos,
+            "ajustes": ajustes,
             "gastos_anuales": gastos_anuales,
             "categorias_disponibles": categorias_disponibles,
             "settings": settings,
@@ -85,7 +89,7 @@ def crear_presupuesto(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Alta y edición: el upsert por (categoría, año, mes) sirve para las dos cosas."""
-    budget_service.upsert_budget(db, category_id, year, month, monthly_limit)
+    budget_service.upsert_budget(db, category_id, year, month, monthly_limit, fijado=True)
     return _redirect(year, month)
 
 
@@ -110,6 +114,14 @@ def eliminar_presupuesto(
     budget_id: int, year: int = Form(...), month: int = Form(...), db: Session = Depends(get_db)
 ) -> RedirectResponse:
     budget_service.deactivate_budget(db, budget_id)
+    return _redirect(year, month)
+
+
+@router.post("/{budget_id}/deshacer-ajuste")
+def deshacer_ajuste(
+    budget_id: int, year: int = Form(...), month: int = Form(...), db: Session = Depends(get_db)
+) -> RedirectResponse:
+    budget_service.deshacer_ajuste(db, budget_id)
     return _redirect(year, month)
 
 

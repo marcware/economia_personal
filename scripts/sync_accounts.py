@@ -8,6 +8,7 @@ from app.database import SessionLocal
 from app.integrations.enablebanking.client import EnableBankingClient
 from app.integrations.enablebanking.sync_service import sync_account
 from app.models import Account
+from app.services import budget_service
 
 
 def main() -> None:
@@ -25,6 +26,8 @@ def main() -> None:
                 print(f"  -> {result}")
             except Exception as exc:  # noqa: BLE001
                 print(f"  -> ERROR: {exc}")
+        # Con los movimientos nuevos, los presupuestos de los meses abiertos se ponen al día.
+        budget_service.ajustar_meses_abiertos(db)
     finally:
         db.close()
 

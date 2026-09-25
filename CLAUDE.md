@@ -135,7 +135,12 @@ Layout is a standard layered FastAPI app under `app/`:
 `Budget` ([app/models/budget.py](app/models/budget.py)) is keyed on `(category_id, year, month)`, not a
 permanent per-category limit — it's meant to be prepared ahead of time for a future month (see
 `budget_service.selectable_months`, which is why `/presupuestos` can navigate to months with no
-transactions yet) and copied forward month to month. `FinancialGoal`
+transactions yet) and copied forward month to month. Open months (current and future, only if they
+already have budgets) also adapt on their own: `budget_service.ajustar_mes` adds a category with spend in
+≥2 of the last 6 months (limit = monthly mean, rounded up to 5 €) and removes one with no spend in 6
+months — altas/bajas only, never recalculating existing limits, and never touching anything the user set,
+edited or removed by hand (`Budget.fijado`). It runs on opening `/presupuestos` and `/` and after
+`scripts/sync_accounts.py`; automatic changes are flagged in `Budget.ajuste_auto` and can be undone. `FinancialGoal`
 ([app/models/goal.py](app/models/goal.py)) is the analogous per-month row for hitos, a closed
 `GoalType` enum rather than a rules DSL — extend the enum + `goal_service._actual`/`_estado` dispatch for
 a new kind of goal, don't add a generic expression language.
