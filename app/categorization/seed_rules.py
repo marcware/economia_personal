@@ -32,6 +32,9 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Hogar", "Teléfono, TV e internet", BudgetGroup.NECESIDAD, False, True, False),
     ("Inversión", "Otras inversiones", BudgetGroup.AHORRO, False, True, False),
     ("Movimientos excluidos", "Traspaso entre cuentas", BudgetGroup.EXCLUIDO, True, False, False),
+    # Botes, regalos en grupo y recibos del piso alquilado que devuelve la inquilina: lo que
+    # pagas por otros y te devuelven no es ni ingreso ni gasto tuyo.
+    ("Movimientos excluidos", "Dinero de paso (botes)", BudgetGroup.EXCLUIDO, True, False, False),
     ("Nómina y otras prestaciones", "Nómina o Pensión", BudgetGroup.INGRESO, False, False, False),
     ("Ocio y viajes", "Cafeterías y restaurantes", BudgetGroup.DESEO, False, False, False),
     ("Ocio y viajes", "Cine, teatro y espectáculos", BudgetGroup.DESEO, False, False, False),
@@ -47,6 +50,7 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Otros ingresos", "Abono de financiación", BudgetGroup.INGRESO, False, False, False),
     ("Otros ingresos", "Ingreso Bizum", BudgetGroup.INGRESO, False, False, False),
     ("Otros ingresos", "Ingresos de otras entidades", BudgetGroup.INGRESO, False, False, False),
+    ("Otros ingresos", "Alquiler cobrado", BudgetGroup.INGRESO, False, False, False),
     ("Vehículo y transporte", "Gasolina y combustible", BudgetGroup.NECESIDAD, False, False, False),
 ]
 

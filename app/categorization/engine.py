@@ -21,6 +21,8 @@ def categorize_transaction(db: Session, transaction: Transaction) -> bool:
     for rule in rules:
         if rule.amount_sign != AmountSign.ANY and rule.amount_sign != sign:
             continue
+        if rule.min_abs_amount is not None and abs(transaction.amount) < rule.min_abs_amount:
+            continue
         if rule.is_regex:
             matched = re.search(rule.pattern, transaction.description_normalized) is not None
         else:

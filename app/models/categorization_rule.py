@@ -1,7 +1,9 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from decimal import Decimal
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -20,6 +22,10 @@ class CategorizationRule(Base):
     pattern: Mapped[str] = mapped_column(String(200))
     is_regex: Mapped[bool] = mapped_column(Boolean, default=False)
     amount_sign: Mapped[AmountSign] = mapped_column(default=AmountSign.ANY)
+    # Importe mínimo (en valor absoluto) para que la regla aplique. Sirve cuando la misma
+    # descripción mezcla cosas distintas según el importe: la inquilina paga el alquiler
+    # (400 €) y devuelve recibos (30 €) con la misma transferencia.
+    min_abs_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     priority: Mapped[int] = mapped_column(Integer, default=100)
     created_from_correction: Mapped[bool] = mapped_column(Boolean, default=False)
