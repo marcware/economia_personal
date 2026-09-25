@@ -92,6 +92,21 @@ Layout is a standard layered FastAPI app under `app/`:
   gasto-real-vs-límite arithmetic (router, advisor and `informe_mensual.py` all call it — don't
   recompute it locally); [goal_service.py](app/services/goal_service.py) is the equivalent for
   monthly financial goals ("hitos").
+  [disponible_service.py](app/services/disponible_service.py) powers the "Hoy" home page (`/`): what's
+  free to spend *until the next payday*, not per calendar month — the salary lands ~27th and funds the
+  following month, and the big fixed charges (mortgage 1st, loans 3rd, utilities ~10th) fall after it.
+  `libre = saldo de cuentas API (sin Mediolanum) − fijos pendientes − necesidades variables pendientes −
+  inversión pendiente − apartado anual`. The payday is auto-detected (largest INGRESO category); a pay
+  cycle maps to the budget month it ends in (27 sep → 26 oct = octubre), using that month's budgets or,
+  if it has none, the median of the previous 3 months. It reuses `budget_service` for the investment
+  commitment and annual expenses rather than recomputing them.
+  [hormiga_service.py](app/services/hormiga_service.py) measures "gastos hormiga" (≤20 € charges in
+  non-recurrent DESEO categories or uncategorized) shown on the dashboard;
+  [libertad_service.py](app/services/libertad_service.py) is the financial-independence panel on
+  `/patrimonio` (emergency fund in months of NECESIDAD spend, consumer debt, savings rate, gasto anual ×
+  25 target and projections at a 4 % real return). The emergency fund counts only `ManualAssetEntry`
+  rows flagged `liquido`; consumer debt is every declared liability whose name doesn't contain
+  "hipoteca".
 - **categorization/** — rule-based auto-categorization. [engine.py](app/categorization/engine.py)
   applies the highest-priority active `CategorizationRule` whose (normalized) description pattern
   matches and whose amount sign matches; [normalize.py](app/categorization/normalize.py) normalizes
@@ -107,7 +122,7 @@ Layout is a standard layered FastAPI app under `app/`:
 - **advisor/** — the "financial coach" advice engine. [engine.py](app/advisor/engine.py)'s `get_advice()`
   is the entrypoint: loads the month's transactions as a pandas DataFrame
   ([data.py](app/advisor/data.py)), then runs independent checks (`rule_50_30_20`, `budget_alerts`,
-  `goal_alerts`, `anomaly_and_savings`), merging and sorting results by severity (`SEVERITY_ORDER` in
+  `goal_alerts`, `anomaly_and_savings`, `habitos`), merging and sorting results by severity (`SEVERITY_ORDER` in
   [types.py](app/advisor/types.py)). New advice checks should follow this same pattern: a pure function
   taking the DataFrame/db + settings and returning a list of `Advice`. `anomaly_and_savings.check_anomalies`
   skips `AHORRO`-group categories on purpose — spending more on savings/investment is good, not anomalous.

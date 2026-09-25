@@ -1,6 +1,139 @@
 {% extends "base.html" %}
-{% block title %}Economía Personal{% endblock %}
+{% block title %}Hoy{% endblock %}
+
+{% macro tabla_pendientes(filas) %}
+  <table>
+    <thead><tr><th>Categoría</th><th>Previsto</th><th>Ya pagado</th><th>Falta</th></tr></thead>
+    <tbody>
+      {% for f in filas %}
+        <tr{% if f.pendiente <= 0 %} class="inactive-row"{% endif %}>
+          <td>{{ f.etiqueta }}{% if f.origen == "media" %} <span class="tag">media</span>{% endif %}</td>
+          <td>{{ "%.2f"|format(f.previsto) }} €</td>
+          <td>{{ "%.2f"|format(f.gastado) }} €</td>
+          <td>{{ "%.2f"|format(f.pendiente) }} €</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
 {% block content %}
-  <h1>Economía Personal</h1>
-  <p>Proyecto en construcción. Próximos pasos: modelo de datos, conexión con ING vía Enable Banking, dashboard mensual y consejos automáticos.</p>
+  <h1>Hoy, {{ d.hoy.strftime('%d/%m/%Y') }}</h1>
+
+  <div class="cards">
+    <div class="card card-hero">
+      <div class="card-label">Libre para gastar hasta la nómina</div>
+      <div class="card-value {{ 'positive' if d.libre >= 0 else 'negative' }}">{{ "%.2f"|format(d.libre) }} €</div>
+      <div class="card-sub">
+        {% if d.libre > 0 %}unos {{ "%.2f"|format(d.libre_por_dia) }} € al día · {% endif %}
+        {{ d.dias }} día{{ "s" if d.dias != 1 }} hasta el {{ d.ciclo.siguiente.strftime('%d/%m') }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">En cuenta</div>
+      <div class="card-value">{{ "%.2f"|format(d.saldo) }} €</div>
+      <div class="card-sub">
+        {% if d.fecha_saldo %}saldo del {{ d.fecha_saldo.strftime('%d/%m') }}{% else %}sin saldo sincronizado{% endif %}
+        {% if d.saldo_viejo %} · <a href="/conexiones">sincroniza</a> para afinarlo{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Ya tiene dueño</div>
+      <div class="card-value negative">{{ "%.2f"|format(d.comprometido) }} €</div>
+      <div class="card-sub">recibos, necesidades, inversión y apartado anual que faltan</div>
+    </div>
+  </div>
+
+  {% if d.ciclo.retrasada %}
+    <p class="advice advice-warning">La nómina tocaba el {{ d.ciclo.siguiente.strftime('%d/%m') }} y aún no aparece.
+       Hasta que entre, el cálculo sigue en el ciclo anterior.</p>
+  {% elif d.dias <= 5 and d.libre > 0 %}
+    <p class="advice advice-info">Quedan {{ d.dias }} días para cobrar. Lo que sobre al llegar la nómina,
+       muévelo a inversión o al colchón antes de empezar el mes nuevo: págate primero.</p>
+  {% endif %}
+
+  <section class="card">
+    <h2>¿Me lo puedo permitir?</h2>
+    <form class="inline-form" id="permitir" onsubmit="return false">
+      <input type="number" step="0.01" min="0" id="permitir-importe" placeholder="Importe (€)" style="width:9rem">
+    </form>
+    <p id="permitir-resultado" class="muted">Escribe un importe para ver cómo te deja hasta la nómina.</p>
+  </section>
+
+  <section>
+    <h2>De dónde sale la cifra</h2>
+    <p class="muted">
+      Ciclo del {{ d.ciclo.inicio.strftime('%d/%m') }} al {{ d.ciclo.siguiente.strftime('%d/%m') }}
+      {% if d.ciclo.detectada %}(de nómina a nómina){% else %}(mes natural: no se detecta la nómina){% endif %},
+      con los presupuestos de <a href="/presupuestos?year={{ d.mes_presupuesto[0] }}&month={{ d.mes_presupuesto[1] }}">{{ d.mes_presupuesto_nombre|lower }}</a>.
+      {% if not d.con_presupuesto %}Ese mes no tiene presupuesto: se usa la mediana de los últimos 3 meses (<span class="tag">media</span>).{% endif %}
+    </p>
+
+    <table>
+      <tbody>
+        <tr><td>Saldo en cuentas</td><td class="positive">{{ "%.2f"|format(d.saldo) }} €</td></tr>
+        <tr><td>− Recibos y fijos que faltan</td><td>{{ "%.2f"|format(d.total_fijos) }} €</td></tr>
+        <tr><td>− Necesidades variables que faltan (súper, gasolina…)</td><td>{{ "%.2f"|format(d.total_variables) }} €</td></tr>
+        <tr><td>− Inversión comprometida que falta
+              <span class="muted">({{ "%.2f"|format(d.inversion_hecha) }} € de {{ "%.2f"|format(d.inversion_prevista) }} € hechos)</span></td>
+            <td>{{ "%.2f"|format(d.inversion_pendiente) }} €</td></tr>
+        <tr><td>− Apartado para gastos anuales</td><td>{{ "%.2f"|format(d.apartado_anual) }} €</td></tr>
+      </tbody>
+      <tfoot>
+        <tr><th>= Libre para ocio y caprichos</th><th>{{ "%.2f"|format(d.libre) }} €</th></tr>
+      </tfoot>
+    </table>
+
+    {% if d.fijos %}
+      <h3>Recibos y fijos</h3>
+      {{ tabla_pendientes(d.fijos) }}
+    {% endif %}
+    {% if d.variables_necesarios %}
+      <h3>Necesidades variables</h3>
+      {{ tabla_pendientes(d.variables_necesarios) }}
+    {% endif %}
+    {% if d.anuales %}
+      <h3>Apartado para gastos anuales</h3>
+      <p class="muted">La parte de este mes de los pagos anuales que aún quedan este año,
+         para que el seguro o el IBI no te pillen sin dinero cuando lleguen.</p>
+      <table>
+        <tbody>
+          {% for a in d.anuales %}
+            <tr><td>{{ a.etiqueta }}</td><td>{{ "%.2f"|format(a.importe) }} €</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
+
+  <script>
+    (function () {
+      var libre = {{ d.libre | tojson }};
+      var dias = {{ d.dias | tojson }};
+      var input = document.getElementById('permitir-importe');
+      var out = document.getElementById('permitir-resultado');
+      var eur = function (x) { return x.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €'; };
+      input.addEventListener('input', function () {
+        var importe = parseFloat(input.value);
+        if (!(importe > 0)) {
+          out.className = 'muted';
+          out.textContent = 'Escribe un importe para ver cómo te deja hasta la nómina.';
+          return;
+        }
+        var queda = libre - importe;
+        var pct = libre > 0 ? importe / libre * 100 : Infinity;
+        if (queda < 0) {
+          out.className = 'advice advice-danger';
+          out.textContent = 'No llega: te faltarían ' + eur(-queda) + ' y tendrías que tirar del dinero de los recibos, de la inversión o del colchón.';
+        } else if (pct > 50) {
+          out.className = 'advice advice-warning';
+          out.textContent = 'Entra, pero se lleva el ' + pct.toFixed(0) + ' % de lo libre: te quedarían ' + eur(queda) +
+            ' (' + eur(queda / dias) + ' al día). Si no es urgente, espera 24 horas antes de comprarlo.';
+        } else {
+          out.className = 'advice advice-info';
+          out.textContent = 'Sí: te quedarían ' + eur(queda) + ' hasta la nómina (' + eur(queda / dias) + ' al día).';
+        }
+      });
+    })();
+  </script>
 {% endblock %}

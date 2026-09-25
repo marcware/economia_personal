@@ -31,7 +31,13 @@ def _latest_by_name(rows: list, value_attr: str) -> list[dict]:
 
 def latest_manual_assets(db: Session) -> list[dict]:
     rows = db.query(ManualAssetEntry).order_by(ManualAssetEntry.recorded_at.desc()).all()
-    return _latest_by_name(rows, "value")
+    activos = _latest_by_name(rows, "value")
+    liquidos = {}
+    for row in rows:
+        liquidos.setdefault(row.name, row.liquido)
+    for a in activos:
+        a["liquido"] = liquidos[a["name"]]
+    return activos
 
 
 def latest_manual_liabilities(db: Session) -> list[dict]:

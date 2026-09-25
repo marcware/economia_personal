@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -30,6 +30,10 @@ class ManualAssetEntry(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     value: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    # Disponible en días sin penalización (colchón, cuenta de ahorro) frente a inversión
+    # a largo plazo (plan de pensiones, cripto, P2P). Cuenta para el fondo de emergencia
+    # de libertad_service; como el valor, rige el de la fila más reciente por `name`.
+    liquido: Mapped[bool] = mapped_column(Boolean, default=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

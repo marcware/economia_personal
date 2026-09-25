@@ -1,5 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Patrimonio{% endblock %}
+{% block title %}Patrimonio
+  {% set l = libertad %}
+  <section>
+    <h2>🧭 Camino a la libertad financiera</h2>
+    <p class="muted">Medias de los últimos {{ l.meses_media }} meses cerrados. El orden importa:
+       primero el colchón, después fuera la deuda cara, después invertir cada vez más.</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">1 · Colchón de emergencia</div>
+        <div class="card-value {{ 'positive' if l.meses_colchon and l.meses_colchon >= l.meses_colchon_objetivo else 'negative' }}">
+          {% if l.meses_colchon is not none %}{{ "%.1f"|format(l.meses_colchon) }} meses{% else %}—{% endif %}
+        </div>
+        <div class="card-sub">{{ "%.0f"|format(l.colchon) }} € líquidos de {{ "%.0f"|format(l.objetivo_colchon) }} €
+          ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
+          {{ "%.0f"|format(l.necesidades_medias) }} €/mes)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">2 · Deuda de consumo</div>
+        <div class="card-value {{ 'positive' if l.total_deuda_consumo == 0 else 'negative' }}">{{ "%.0f"|format(l.total_deuda_consumo) }} €</div>
+        <div class="card-sub">préstamos (sin hipoteca). Amortizar uno al 7-10 % TAE rinde más,
+          y seguro, que invertir esperando un 4-7 %.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">3 · Tasa de ahorro</div>
+        <div class="card-value {{ 'positive' if l.tasa_ahorro is not none and l.tasa_ahorro >= l.tasa_ahorro_objetivo else 'negative' }}">
+          {% if l.tasa_ahorro is not none %}{{ "%.0f"|format(l.tasa_ahorro) }} %{% else %}—{% endif %}
+        </div>
+        <div class="card-sub">objetivo ≥ {{ "%.0f"|format(l.tasa_ahorro_objetivo) }} % · ingresas {{ "%.0f"|format(l.ingresos_medios) }} €/mes,
+          consumes {{ "%.0f"|format(l.consumo_medio) }} €, inviertes {{ "%.0f"|format(l.inversion_media) }} €</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Independencia financiera</div>
+        <div class="card-value">{% if l.progreso_fi is not none %}{{ "%.1f"|format(l.progreso_fi) }} %{% else %}—{% endif %}</div>
+        <div class="card-sub">{{ "%.0f"|format(l.invertido) }} € invertidos de {{ "%.0f"|format(l.numero_fi) }} €
+          (gasto anual × 25, regla del 4 %)</div>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Escenario</th><th>Inviertes al mes</th><th>En 10 años tendrías</th><th>Libertad financiera en</th></tr></thead>
+      <tbody>
+        {% for e in l.escenarios %}
+          <tr>
+            <td>{{ e.etiqueta }}</td>
+            <td>{{ "%.0f"|format(e.mensual) }} €</td>
+            <td>{{ "%.0f"|format(e.en_10_años) }} €</td>
+            <td>{% if e.años is not none %}{{ "%.0f"|format(e.años) }} años{% else %}más de 60 años{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Suponiendo un {{ "%.0f"|format(l.rentabilidad_real) }} % anual por encima de la inflación
+       (orientativo para una cartera indexada global a largo plazo; no es una garantía).
+       Bajar el gasto acerca la meta por los dos lados: sube lo que inviertes y baja la cifra objetivo.</p>
+  </section>
+{% endblock %}
 {% block content %}
   <h1>Patrimonio neto</h1>
 
@@ -46,13 +102,19 @@
       <thead><tr><th>Nombre</th><th>Valor</th><th>Actualizado</th></tr></thead>
       <tbody>
         {% for a in summary.assets %}
-          <tr><td>{{ a.name }}</td><td>{{ "%.2f"|format(a.value) }} €</td><td>{{ a.recorded_at.strftime('%d/%m/%Y') }}</td></tr>
+          <tr>
+            <td>{{ a.name }}{% if a.liquido %} <span class="tag">líquido</span>{% endif %}</td>
+            <td>{{ "%.2f"|format(a.value) }} €</td>
+            <td>{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
     <form method="post" action="/patrimonio/activo" class="inline-form">
       <input type="text" name="name" placeholder="Nombre (p.ej. PIAS, Fondos, BIT2ME)" required>
       <input type="number" step="0.01" name="value" placeholder="Valor actual (€)" required>
+      <label class="checkbox-label"><input type="checkbox" name="liquido" value="true">
+        Líquido (colchón: se puede sacar en días sin perder dinero)</label>
       <button type="submit" class="button-sm">Guardar</button>
     </form>
   </section>
@@ -72,5 +134,61 @@
       <input type="number" step="0.01" name="outstanding_balance" placeholder="Capital pendiente (€)" required>
       <button type="submit" class="button-sm">Guardar</button>
     </form>
+  </section>
+
+  {% set l = libertad %}
+  <section>
+    <h2>🧭 Camino a la libertad financiera</h2>
+    <p class="muted">Medias de los últimos {{ l.meses_media }} meses cerrados. El orden importa:
+       primero el colchón, después fuera la deuda cara, después invertir cada vez más.</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">1 · Colchón de emergencia</div>
+        <div class="card-value {{ 'positive' if l.meses_colchon and l.meses_colchon >= l.meses_colchon_objetivo else 'negative' }}">
+          {% if l.meses_colchon is not none %}{{ "%.1f"|format(l.meses_colchon) }} meses{% else %}—{% endif %}
+        </div>
+        <div class="card-sub">{{ "%.0f"|format(l.colchon) }} € líquidos de {{ "%.0f"|format(l.objetivo_colchon) }} €
+          ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
+          {{ "%.0f"|format(l.necesidades_medias) }} €/mes)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">2 · Deuda de consumo</div>
+        <div class="card-value {{ 'positive' if l.total_deuda_consumo == 0 else 'negative' }}">{{ "%.0f"|format(l.total_deuda_consumo) }} €</div>
+        <div class="card-sub">préstamos (sin hipoteca). Amortizar uno al 7-10 % TAE rinde más,
+          y seguro, que invertir esperando un 4-7 %.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">3 · Tasa de ahorro</div>
+        <div class="card-value {{ 'positive' if l.tasa_ahorro is not none and l.tasa_ahorro >= l.tasa_ahorro_objetivo else 'negative' }}">
+          {% if l.tasa_ahorro is not none %}{{ "%.0f"|format(l.tasa_ahorro) }} %{% else %}—{% endif %}
+        </div>
+        <div class="card-sub">objetivo ≥ {{ "%.0f"|format(l.tasa_ahorro_objetivo) }} % · ingresas {{ "%.0f"|format(l.ingresos_medios) }} €/mes,
+          consumes {{ "%.0f"|format(l.consumo_medio) }} €, inviertes {{ "%.0f"|format(l.inversion_media) }} €</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Independencia financiera</div>
+        <div class="card-value">{% if l.progreso_fi is not none %}{{ "%.1f"|format(l.progreso_fi) }} %{% else %}—{% endif %}</div>
+        <div class="card-sub">{{ "%.0f"|format(l.invertido) }} € invertidos de {{ "%.0f"|format(l.numero_fi) }} €
+          (gasto anual × 25, regla del 4 %)</div>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Escenario</th><th>Inviertes al mes</th><th>En 10 años tendrías</th><th>Libertad financiera en</th></tr></thead>
+      <tbody>
+        {% for e in l.escenarios %}
+          <tr>
+            <td>{{ e.etiqueta }}</td>
+            <td>{{ "%.0f"|format(e.mensual) }} €</td>
+            <td>{{ "%.0f"|format(e.en_10_años) }} €</td>
+            <td>{% if e.años is not none %}{{ "%.0f"|format(e.años) }} años{% else %}más de 60 años{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Suponiendo un {{ "%.0f"|format(l.rentabilidad_real) }} % anual por encima de la inflación
+       (orientativo para una cartera indexada global a largo plazo; no es una garantía).
+       Bajar el gasto acerca la meta por los dos lados: sube lo que inviertes y baja la cifra objetivo.</p>
   </section>
 {% endblock %}

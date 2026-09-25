@@ -2,6 +2,7 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
   <h1>Dashboard</h1>
+  <p class="muted">¿Cuánto puedes gastar hoy? Míralo en <a href="/">Hoy</a>.</p>
 
   {% if sin_datos %}
     <p>Todavía no hay movimientos. Ve a <a href="/conexiones">Conexiones</a> para conectar tu banco y sincronizar.</p>
@@ -58,11 +59,46 @@
           <li class="advice advice-{{ a.severity }}">
             <strong>{{ a.title }}</strong>
             <p>{{ a.message }}</p>
-            {% if a.url %}<p><a href="{{ a.url }}">Ir a presupuestos &raquo;</a></p>{% endif %}
+            {% if a.url %}<p><a href="{{ a.url }}">Ver detalle &raquo;</a></p>{% endif %}
           </li>
         {% endfor %}
       </ul>
       <p><a href="/consejos?year={{ summary.year }}&month={{ summary.month }}">Ver todos los consejos &raquo;</a></p>
+    {% endif %}
+
+    {% if hormiga.num or hormiga.media_mensual %}
+      <section>
+        <h3>🐜 Gastos hormiga</h3>
+        <p class="muted">Caprichos de hasta {{ hormiga.importe_max|int }} € (ocio, compras, sin clasificar):
+           uno a uno no se notan, sumados sí.</p>
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">Este mes</div>
+            <div class="card-value">{{ "%.2f"|format(hormiga.total) }} €</div>
+            <div class="card-sub">{{ hormiga.num }} compras · media {{ "%.0f"|format(hormiga.media_mensual) }} €/mes
+              ({{ "%.0f"|format(hormiga.num_medio) }} compras)</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Al año, a tu ritmo medio</div>
+            <div class="card-value negative">{{ "%.0f"|format(hormiga.anual) }} €</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Invertido {{ hormiga.años }} años serían</div>
+            <div class="card-value positive">{{ "%.0f"|format(hormiga.invertido) }} €</div>
+            <div class="card-sub">al {{ "%.0f"|format(hormiga.rentabilidad_real) }} % anual por encima de la inflación</div>
+          </div>
+        </div>
+        {% if hormiga.comercios %}
+          <table>
+            <thead><tr><th>Dónde se van (últimos 3 meses)</th><th>Veces</th><th>Total</th></tr></thead>
+            <tbody>
+              {% for c in hormiga.comercios %}
+                <tr><td>{{ c.nombre }}</td><td>{{ c.num }}</td><td>{{ "%.2f"|format(c.total) }} €</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      </section>
     {% endif %}
 
     <h3>Top categorías de gasto</h3>

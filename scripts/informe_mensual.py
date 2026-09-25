@@ -14,6 +14,7 @@ from sqlalchemy import func
 from app.advisor.engine import get_advice
 from app.database import SessionLocal
 from app.models import FinancialNote, Transaction, TransferCandidate, TransferCandidateStatus
+from app.services import disponible_service, hormiga_service, libertad_service
 from app.services.budget_service import budget_summary
 from app.services.dashboard_service import MONTHS_ES, monthly_summary
 from app.services.goal_service import goal_rows
@@ -87,6 +88,33 @@ def main(year: int, month: int) -> None:
             for h in hitos:
                 actual = "sin datos" if h["actual"] is None else f"{h['actual']:.2f} {h['unidad']}"
                 print(f"  [{h['estado']:>10}] {h['titulo']:40} {actual:>14}  (objetivo {h['etiqueta_objetivo']})")
+
+        hormiga = hormiga_service.resumen(db, year, month)
+        if hormiga["num"] or hormiga["media_mensual"]:
+            print(
+                f"\nGastos hormiga (≤{hormiga['importe_max']:.0f}€): {hormiga['num']} compras, "
+                f"{hormiga['total']:.2f}€ | media {hormiga['media_mensual']:.2f}€/mes "
+                f"= {hormiga['anual']:.0f}€/año"
+            )
+            for c in hormiga["comercios"][:3]:
+                print(f"    {c['num']:3} x {c['total']:>8.2f}€  {c['nombre']}")
+
+        hoy = date.today()
+        if (year, month) == (hoy.year, hoy.month):
+            d = disponible_service.disponible(db, hoy)
+            print(
+                f"\nDisponible hoy: saldo {d['saldo']:.2f}€ - comprometido {d['comprometido']:.2f}€ "
+                f"= libre {d['libre']:.2f}€ hasta el {d['ciclo']['siguiente']:%d/%m} "
+                f"({d['libre_por_dia']:.2f}€/día, presupuesto de {d['mes_presupuesto_nombre']})"
+            )
+            l = libertad_service.resumen(db, hoy)
+            colchon = f"{l['meses_colchon']:.1f}" if l["meses_colchon"] is not None else "?"
+            tasa = f"{l['tasa_ahorro']:.0f}%" if l["tasa_ahorro"] is not None else "?"
+            print(
+                f"Base: colchón {colchon}/{l['meses_colchon_objetivo']} meses | deuda de consumo "
+                f"{l['total_deuda_consumo']:.0f}€ | tasa de ahorro {tasa} ({l['meses_media']} meses) "
+                f"| libertad financiera {l['progreso_fi']:.1f}% de {l['numero_fi']:.0f}€"
+            )
 
         print("\nConsejos automáticos:")
         advices = get_advice(db, year, month)

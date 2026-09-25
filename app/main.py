@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
 from app.routers import (
     advice,
@@ -15,6 +16,8 @@ from app.routers import (
     transactions,
     transfer_candidates,
 )
+from app.database import get_db
+from app.services import disponible_service
 from app.templating import templates
 
 APP_DIR = Path(__file__).resolve().parent
@@ -35,8 +38,11 @@ app.include_router(net_worth.router)
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "home.html")
+def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Portada "Hoy": cuánto es libre hasta la nómina, para decidir antes de comprar."""
+    return templates.TemplateResponse(
+        request, "home.html", {"d": disponible_service.disponible(db)}
+    )
 
 
 @app.get("/salud")

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.advisor.engine import get_advice
 from app.database import get_db
+from app.services import hormiga_service
 from app.services.dashboard_service import available_months, evolution, monthly_summary
 from app.templating import templates
 
@@ -28,6 +29,7 @@ def dashboard_home(
     summary = monthly_summary(db, year, month)
     trend = evolution(db, months=12)
     advices = get_advice(db, year, month)[:3]
+    hormiga = hormiga_service.resumen(db, year, month)
 
     return templates.TemplateResponse(
         request,
@@ -40,5 +42,6 @@ def dashboard_home(
             "next_month": next_month,
             "top_categorias": summary["desglose_categorias"][:8],
             "advices": advices,
+            "hormiga": hormiga,
         },
     )

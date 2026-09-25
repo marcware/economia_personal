@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.advisor import anomaly_and_savings, budget_alerts, goal_alerts, rule_50_30_20
+from app.advisor import anomaly_and_savings, budget_alerts, goal_alerts, habitos, rule_50_30_20
 from app.advisor.data import category_label, load_categories, load_transactions_df
 from app.advisor.types import SEVERITY_ORDER, Advice
 from app.models import Budget, UserSettings
@@ -27,6 +27,8 @@ def get_advice(db: Session, year: int, month: int) -> list[Advice]:
     advices += anomaly_and_savings.check_anomalies(df, year, month, settings, budgeted_categories)
     advices += anomaly_and_savings.check_trends(df, year, month)
     advices += anomaly_and_savings.check_subscriptions(df, year, month)
+    advices += habitos.check_hormiga(db, year, month)
+    advices += habitos.check_base(db, year, month)
 
     advices.sort(key=lambda a: SEVERITY_ORDER.get(a.severity, 99))
     return advices
