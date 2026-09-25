@@ -22,6 +22,8 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Ahorro", "Redondeo", BudgetGroup.AHORRO, False, True, False),
     ("Alimentación", "Supermercados y alimentación", BudgetGroup.NECESIDAD, False, False, False),
     ("Compras", "Compras (otros)", BudgetGroup.DESEO, False, False, False),
+    ("Compras", "Electrónica e informática", BudgetGroup.DESEO, False, False, False),
+    ("Compras", "Ropa y calzado", BudgetGroup.DESEO, False, False, False),
     ("Compras", "Regalos y juguetes", BudgetGroup.DESEO, False, False, False),
     ("Educación y salud", "Deporte y gimnasio", BudgetGroup.DESEO, False, True, False),
     ("Educación y salud", "Farmacia, herbolario y nutrición", BudgetGroup.NECESIDAD, False, False, False),
@@ -29,6 +31,8 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Hogar", "Hipoteca", BudgetGroup.NECESIDAD, False, True, False),
     ("Hogar", "Luz y gas", BudgetGroup.NECESIDAD, False, True, False),
     ("Hogar", "Mantenimiento del hogar", BudgetGroup.NECESIDAD, False, False, False),
+    ("Hogar", "Mascotas", BudgetGroup.NECESIDAD, False, False, False),  # el gato
+    ("Hogar", "Muebles y decoración", BudgetGroup.DESEO, False, False, False),
     ("Hogar", "Teléfono, TV e internet", BudgetGroup.NECESIDAD, False, True, False),
     ("Inversión", "Otras inversiones", BudgetGroup.AHORRO, False, True, False),
     ("Movimientos excluidos", "Traspaso entre cuentas", BudgetGroup.EXCLUIDO, True, False, False),
@@ -52,6 +56,7 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Otros ingresos", "Ingresos de otras entidades", BudgetGroup.INGRESO, False, False, False),
     ("Otros ingresos", "Alquiler cobrado", BudgetGroup.INGRESO, False, False, False),
     ("Vehículo y transporte", "Gasolina y combustible", BudgetGroup.NECESIDAD, False, False, False),
+    ("Vehículo y transporte", "Mantenimiento del vehículo", BudgetGroup.NECESIDAD, False, False, False),
 ]
 
 # (patrón, es_regex, amount_sign, categoría, subcategoría, prioridad)
@@ -111,7 +116,7 @@ SEED_RULES: list[tuple[str, bool, AmountSign, str, str, int]] = [
     # Compras genéricas
     ("AMAZON", False, AmountSign.ANY, "Compras", "Compras (otros)", 200),
     ("EL CORTE INGLES", False, AmountSign.ANY, "Compras", "Compras (otros)", 200),
-    ("PCCOMPONENTES", False, AmountSign.ANY, "Compras", "Compras (otros)", 200),
+    ("PCCOMPONENTES", False, AmountSign.ANY, "Compras", "Electrónica e informática", 200),
     # Préstamos / impuestos
     ("CARGO CUOTA DE PRESTAMO", False, AmountSign.ANY, "Otros gastos", "Otros préstamos y avales", 130),
     ("SUMA GESTION", False, AmountSign.ANY, "Otros gastos", "Pago de impuestos", 130),
