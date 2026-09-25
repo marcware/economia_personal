@@ -28,6 +28,7 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Educación y salud", "Deporte y gimnasio", BudgetGroup.DESEO, False, True, False),
     ("Educación y salud", "Farmacia, herbolario y nutrición", BudgetGroup.NECESIDAD, False, False, False),
     ("Hogar", "Alquiler vivienda", BudgetGroup.NECESIDAD, False, True, False),
+    ("Hogar", "Electrodomésticos", BudgetGroup.NECESIDAD, False, False, False),
     ("Hogar", "Hipoteca", BudgetGroup.NECESIDAD, False, True, False),
     ("Hogar", "Luz y gas", BudgetGroup.NECESIDAD, False, True, False),
     ("Hogar", "Mantenimiento del hogar", BudgetGroup.NECESIDAD, False, False, False),

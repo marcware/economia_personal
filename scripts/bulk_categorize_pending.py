@@ -134,13 +134,14 @@ RULES: list[tuple[str, bool, str, str]] = [
     # Amazon Prime (cuota anual) es suscripción; gana a la regla semilla genérica "AMAZON",
     # que deja el resto de compras de Amazon en "Compras (otros)".
     ("AMAZON PRIME", False, "Otros gastos", "Suscripciones"),
+    ("AMAZON MEDI", False, "Ocio y viajes", "Libros, música y videojuegos"),  # Kindle, cómics
     ("AMZN MKTP", False, "Ocio y viajes", "Libros, música y videojuegos"),  # sobre todo libros y videojuegos
     ("ALIEXPRESS.COM", False, "Ocio y viajes", "Libros, música y videojuegos"),
     ("TEMU.COM", False, "Ocio y viajes", "Libros, música y videojuegos"),
     ("DECATHLON", False, "Compras", "Ropa y calzado"),
     ("LEROY MERLIN", False, "Hogar", "Mantenimiento del hogar"),
     ("FERRETERIA", False, "Hogar", "Mantenimiento del hogar"),
-    ("ELECTRODOMESTICOS", False, "Compras", "Compras (otros)"),
+    ("ELECTRODOMESTICOS", False, "Hogar", "Electrodomésticos"),
     ("FNAC", False, "Ocio y viajes", "Libros, música y videojuegos"),
     ("LIBRERIA", False, "Ocio y viajes", "Libros, música y videojuegos"),
     ("CASA DEL LIBRO", False, "Ocio y viajes", "Libros, música y videojuegos"),
