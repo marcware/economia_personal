@@ -5,6 +5,7 @@ from app.models import UserSettings
 
 MIN_HISTORY_MONTHS = 3
 MIN_ABSOLUTE_DIFF = 10.0  # evita avisos por ruido en importes pequeños
+MIN_SUBIDA_TENDENCIA = 0.15  # una tendencia ha de subir al menos esto sobre el primer mes
 
 
 def _monthly_category_series(df: pd.DataFrame) -> pd.DataFrame:
@@ -61,7 +62,7 @@ def check_trends(df: pd.DataFrame, year: int, month: int) -> list[Advice]:
             continue
         recent = group.set_index("period")["amount"].reindex(last_3_periods, fill_value=0.0)
         a, b, c = recent.tolist()
-        if a > MIN_ABSOLUTE_DIFF and b > a and c > b:
+        if a > MIN_ABSOLUTE_DIFF and b > a and c > b and c - a > max(MIN_ABSOLUTE_DIFF, MIN_SUBIDA_TENDENCIA * a):
             advices.append(Advice(
                 "tendencia_gasto", "info", f"Tendencia al alza en {category_label}",
                 f"Tu gasto en {category_label} lleva 3 meses subiendo "

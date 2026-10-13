@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import BudgetGroup, Category, GoalType, UserSettings
-from app.services import budget_service, goal_service
+from app.services import budget_service, goal_service, libertad_service
 from app.services.dashboard_service import MONTHS_ES
 from app.templating import templates
 
@@ -34,6 +34,9 @@ def presupuestos_home(
     next_month = meses[idx - 1] if idx > 0 else None
 
     resumen = budget_service.budget_summary(db, year, month)
+    # Sin ningún Budget real (solo la fila virtual de inversión) el balance diría "0 € de gasto".
+    tiene_presupuestos = any(f["budget"] is not None for f in resumen["filas"])
+    balance = budget_service.balance_mes(db, year, month, resumen) if tiene_presupuestos else None
     hitos = goal_service.goal_rows(db, year, month)
     ajustes = budget_service.ajustes_automaticos(db, year, month)
     gastos_anuales = budget_service.gastos_anuales(db, year)
@@ -57,9 +60,12 @@ def presupuestos_home(
         "budgets.html",
         {
             "resumen": resumen,
+            "balance": balance,
+            "consumo_medio": libertad_service.medias_mensuales(db)["consumo"],
             "hitos": hitos,
             "ajustes": ajustes,
             "gastos_anuales": gastos_anuales,
+            "paso": budget_service.dinero_de_paso(db, year, month),
             "categorias_disponibles": categorias_disponibles,
             "settings": settings,
             "year": year,

@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Movimientos{% endblock %}
 {% block content %}
+  {% import "_category_picker.html" as cp %}
+  {% set filtros = "/movimientos?categoria=" ~ categoria ~ "&cuenta=" ~ (cuenta or '') ~ "&texto=" ~ texto|urlencode %}
+  {% set base_url = filtros ~ "&mes=" ~ mes %}
   <h1>Movimientos</h1>
   <p><a href="/movimientos/agrupados">Categorizar pendientes agrupados por comercio &raquo;</a></p>
 
@@ -9,11 +12,7 @@
       <option value="" {{ 'selected' if not categoria }}>Todas las categorías</option>
       <option value="sin_clasificar" {{ 'selected' if categoria == 'sin_clasificar' }}>Sin clasificar</option>
       {% for c in categories %}
-        {% if c.parent_id %}
-          <option value="{{ c.id }}" {{ 'selected' if categoria == c.id|string }}>
-            {{ c.parent.name }} · {{ c.name }}
-          </option>
-        {% endif %}
+        <option value="{{ c.id }}" {{ 'selected' if categoria == c.id|string }}>{{ c.parent.name }} · {{ c.name }}</option>
       {% endfor %}
     </select>
     <select name="cuenta">
@@ -23,10 +22,18 @@
       {% endfor %}
     </select>
     <input type="text" name="texto" placeholder="Buscar en descripción…" value="{{ texto }}">
+    {% if mes %}<input type="hidden" name="mes" value="{{ mes }}">{% endif %}
     <button type="submit" class="button-sm">Filtrar</button>
   </form>
 
-  <p>{{ total }} movimiento(s)</p>
+  <p>
+    {{ total }} movimiento(s){% if mes %} en {{ mes_nombre }}{% endif %},
+    suma <span class="{{ 'positive' if suma > 0 else 'negative' }}">{{ "%.2f"|format(suma) }} €</span>
+    {% if mes %}
+      · <a href="{{ filtros }}">ver todos los meses</a>
+      · <a href="/presupuestos?year={{ year }}&month={{ month }}">&laquo; volver al presupuesto</a>
+    {% endif %}
+  </p>
 
   <table>
     <thead>
@@ -42,17 +49,8 @@
             <form method="post" action="/movimientos/categorizar" class="inline-form">
               <input type="hidden" name="transaction_id" value="{{ t.id }}">
               <input type="hidden" name="redirect_to"
-                     value="/movimientos?categoria={{ categoria }}&cuenta={{ cuenta or '' }}&texto={{ texto }}&page={{ page }}">
-              <select name="category_id" required>
-                <option value="" disabled {{ 'selected' if not t.category_id }}>Elegir…</option>
-                {% for c in categories %}
-                  {% if c.parent_id %}
-                    <option value="{{ c.id }}" {{ 'selected' if t.category_id == c.id }}>
-                      {{ c.parent.name }} · {{ c.name }}
-                    </option>
-                  {% endif %}
-                {% endfor %}
-              </select>
+                     value="{{ base_url }}&page={{ page }}">
+              {{ cp.picker(t.category) }}
               <label class="checkbox-label">
                 <input type="checkbox" name="apply_to_similar" value="true" checked>
                 aplicar a similares
@@ -67,11 +65,12 @@
 
   <div class="pagination">
     {% if page > 1 %}
-      <a href="/movimientos?categoria={{ categoria }}&cuenta={{ cuenta or '' }}&texto={{ texto }}&page={{ page - 1 }}">&laquo; anterior</a>
+      <a href="{{ base_url }}&page={{ page - 1 }}">&laquo; anterior</a>
     {% endif %}
     <span>Página {{ page }} de {{ total_pages }}</span>
     {% if page < total_pages %}
-      <a href="/movimientos?categoria={{ categoria }}&cuenta={{ cuenta or '' }}&texto={{ texto }}&page={{ page + 1 }}">siguiente &raquo;</a>
+      <a href="{{ base_url }}&page={{ page + 1 }}">siguiente &raquo;</a>
     {% endif %}
   </div>
+  {{ cp.datalist(categories) }}
 {% endblock %}

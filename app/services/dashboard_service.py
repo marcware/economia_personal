@@ -21,7 +21,15 @@ def _load_transactions_df(db: Session) -> pd.DataFrame:
         return df
     df["amount"] = df["amount"].astype(float)
     df["date"] = pd.to_datetime(df["date"])
+    grupos = {c.id: c.budget_group.value for c in db.query(Category).all() if c.budget_group}
+    df["budget_group"] = df["category_id"].map(grupos)
     return df
+
+
+def _es_ingreso(df: pd.DataFrame) -> pd.Series:
+    """Ingreso = abono en una categoría INGRESO. Un positivo en otra categoría es una
+    devolución, o un préstamo abonado en cuenta: no es dinero ganado."""
+    return (df["amount"] > 0) & (df["budget_group"] == "INGRESO")
 
 
 def available_months(db: Session) -> list[tuple[int, int]]:
@@ -49,7 +57,7 @@ def monthly_summary(db: Session, year: int, month: int) -> dict:
     empty = {
         "year": year, "month": month, "month_name": MONTHS_ES[month],
         "ingresos": 0.0, "gastos": 0.0, "ahorro": 0.0, "tasa_ahorro": None,
-        "desglose_categorias": [],
+        "otros_abonos": 0.0, "desglose_categorias": [],
     }
     if df.empty:
         return empty
@@ -59,7 +67,8 @@ def monthly_summary(db: Session, year: int, month: int) -> dict:
     if month_df.empty:
         return empty
 
-    ingresos = float(month_df.loc[month_df["amount"] > 0, "amount"].sum())
+    ingresos = float(month_df.loc[_es_ingreso(month_df), "amount"].sum())
+    otros_abonos = float(month_df.loc[(month_df["amount"] > 0) & ~_es_ingreso(month_df), "amount"].sum())
     gastos = float(-month_df.loc[month_df["amount"] < 0, "amount"].sum())
     ahorro = ingresos - gastos
 
@@ -76,6 +85,7 @@ def monthly_summary(db: Session, year: int, month: int) -> dict:
         "ingresos": round(ingresos, 2),
         "gastos": round(gastos, 2),
         "ahorro": round(ahorro, 2),
+        "otros_abonos": round(otros_abonos, 2),
         "tasa_ahorro": round(ahorro / ingresos * 100, 1) if ingresos else None,
         "desglose_categorias": [{"categoria": k, "importe": round(v, 2)} for k, v in desglose.items()],
     }
@@ -89,9 +99,10 @@ def evolution(db: Session, months: int = 12) -> list[dict]:
     df = df[~df["is_transfer"]].copy()
     df["period"] = df["date"].dt.to_period("M")
 
-    grouped = df.groupby("period")["amount"].agg(
-        ingresos=lambda s: s[s > 0].sum(),
-        gastos=lambda s: -s[s < 0].sum(),
+    df["ingreso"] = df["amount"].where(_es_ingreso(df), 0.0)
+    df["gasto"] = (-df["amount"]).where(df["amount"] < 0, 0.0)
+    grouped = df.groupby("period").agg(
+        ingresos=("ingreso", "sum"), gastos=("gasto", "sum")
     ).sort_index().tail(months)
 
     return [

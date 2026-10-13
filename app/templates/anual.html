@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Año {{ r.year }}{% endblock %}
+
+{% macro eur(v) %}{{ "{:,.0f}".format(v).replace(",", ".") }}{% endmacro %}
+
+{% macro celdas(f) %}
+  {% for c in f.celdas %}
+    <td class="num {{ 'prev' if c.origen != 'real' }}{{ ' aviso' if c.aviso }}"
+        title="{{ c.aviso or ('Previsto (' ~ c.origen ~ ')' ~ (' · llevas ' ~ '%.2f'|format(c.real) ~ ' €' if c.real else '') if c.origen != 'real' else '') }}">
+      {% if c.importe >= 0.5 %}{{ eur(c.importe) }}{% if c.aviso %} ⚠{% endif %}{% endif %}
+    </td>
+  {% endfor %}
+  <td class="num total">{{ eur(f.total) }}</td>
+{% endmacro %}
+
+{% macro fila_total(etiqueta, valores, clase="") %}
+  <tr class="{{ clase }}">
+    <th>{{ etiqueta }}</th>
+    {% for v in valores %}
+      <td class="num {{ 'prev' if r.meses[loop.index0].estado != 'cerrado' }}{{ ' negative' if v < -0.5 and clase == 'saldo' }}">{{ eur(v) }}</td>
+    {% endfor %}
+    <td class="num total{{ ' negative' if valores|sum < -0.5 and clase == 'saldo' }}">{{ eur(valores|sum) }}</td>
+  </tr>
+{% endmacro %}
+
+{% block content %}
+  <h1>Año {{ r.year }}</h1>
+  <p class="muted">Como la hoja de gastos anual, pero con los movimientos reales: los meses cerrados son
+    gasto real; el mes en curso y los siguientes (<em>en cursiva</em>) son previsión — el presupuesto si lo
+    hay; para impuestos y seguros, lo que se pagó ese mismo mes el año pasado; y si no, la media reciente.</p>
+
+  <div class="month-nav">
+    <span>{% for a in años %}{% if a == r.year %}<strong>{{ a }}</strong>{% else %}<a href="/anual?year={{ a }}">{{ a }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+  </div>
+
+  {% if r.ingresos_incompletos %}
+    <p class="advice advice-warning">Faltan ingresos en {{ r.ingresos_incompletos|join(", ") }}: lo más probable es
+      que no estén importados los extractos de Mediolanum de esos meses (allí entra la nómina), así que el
+      resultado de esos meses sale peor de lo que fue.</p>
+  {% endif %}
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Gasto del año (real + previsto)</div>
+      <div class="card-value negative">{{ eur(r.gasto_año) }} €</div>
+      <div class="card-sub">{{ eur(r.gasto_real_hasta_hoy) }} € ya gastados en meses cerrados · media {{ eur(r.media_mensual) }} €/mes</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Ingresos del año</div>
+      <div class="card-value positive">{{ eur(r.ingresos_año) }} €</div>
+      <div class="card-sub">previstos {{ eur(r.ingreso_previsto) }} €/mes regulares</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Inversión del año</div>
+      <div class="card-value">{{ eur(r.inversion_año) }} €</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">Resultado del año</div>
+      <div class="card-value {{ 'positive' if r.resultado_año >= 0 else 'negative' }}">{{ eur(r.resultado_año) }} €</div>
+      <div class="card-sub">ingresos − gastos − inversión · mes más caro: {{ r.mes_max.nombre }} ({{ eur(r.mes_max.importe) }} €)</div>
+    </div>
+  </div>
+
+  <div class="chart-box">
+    <canvas id="chartAnual" height="90"></canvas>
+  </div>
+
+  <div class="tabla-anual">
+    <table>
+      <thead>
+        <tr>
+          <th>Concepto</th>
+          {% for m in r.meses %}
+            <th class="num {{ m.estado }}">{{ m.nombre }}{% if m.estado == 'en_curso' %}*{% endif %}</th>
+          {% endfor %}
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ fila_total("Ingresos", r.ingresos, "ingresos") }}
+
+        <tr class="seccion"><th colspan="14">Gastos fijos</th></tr>
+        {% for f in r.fijos %}
+          <tr><td>{{ f.etiqueta }}{% if f.anual %} <span class="tag">anual</span>{% endif %}</td>{{ celdas(f) }}</tr>
+        {% endfor %}
+        {{ fila_total("Total fijos", r.total_fijos, "subtotal") }}
+
+        <tr class="seccion"><th colspan="14">Gastos variables</th></tr>
+        {% for f in r.variables %}
+          <tr><td>{{ f.etiqueta }}</td>{{ celdas(f) }}</tr>
+        {% endfor %}
+        {{ fila_total("Total variables", r.total_variables, "subtotal") }}
+
+        {{ fila_total("Total gastos", r.total_gastos, "subtotal fuerte") }}
+        {{ fila_total("Ahorro e inversión", r.inversion) }}
+        {{ fila_total("Resultado del mes", r.resultado, "saldo") }}
+        <tr class="saldo">
+          <th>Acumulado del año</th>
+          {% for v in r.acumulado %}
+            <td class="num {{ 'prev' if r.meses[loop.index0].estado != 'cerrado' }}{{ ' negative' if v < -0.5 }}">{{ eur(v) }}</td>
+          {% endfor %}
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">* mes en curso: en cada celda, lo ya gastado o lo previsto, lo que sea mayor.
+    ⚠ = el presupuesto de ese mes es menor que lo que se pagó el mismo mes del año pasado (se usa lo del año pasado).
+    Pasa el ratón por una celda prevista para ver de dónde sale.</p>
+
+  <section>
+    <h2>Hucha de pagos anuales</h2>
+    <p class="muted">Impuestos y seguros no llegan repartidos: se concentran en unos pocos meses. Lo que excede
+      de un mes normal hay que tenerlo ahorrado antes, apartándolo también en los meses tranquilos.</p>
+    <div class="cards">
+      <div class="card card-hero">
+        <div class="card-label">Aparta cada mes</div>
+        <div class="card-value">{{ eur(hucha.aportacion) }} €</div>
+        <div class="card-sub">empezando hoy de cero, llegas a todos los recibos de los próximos 12 meses</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Pagos anuales próximos 12 meses</div>
+        <div class="card-value">{{ eur(hucha.total) }} €</div>
+        <div class="card-sub">{{ eur(hucha.media_mensual) }} €/mes repartidos a partes iguales</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Mes</th><th>Qué llega</th><th class="num">Importe</th></tr></thead>
+      <tbody>
+        {% for m in hucha.meses if m.total >= 1 %}
+          <tr>
+            <td>{{ m.nombre }}</td>
+            <td>{% for c in m.conceptos %}{{ c.etiqueta }} ({{ eur(c.importe) }} €){% if not loop.last %}, {% endif %}{% endfor %}</td>
+            <td class="num">{{ eur(m.total) }} €</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Hucha de vacaciones y compras grandes</h2>
+    <p class="muted">Los gastos gordos que no son de todos los meses: un viaje, un portátil. Salen de tu histórico
+      (meses en que una categoría de deseos se pasó al menos {{ eur(grandes.umbral) }} € de lo normal en los últimos
+      {{ grandes.meses }} meses). Si no se apartan mes a mes, el día que llegan se pagan con el colchón o con un préstamo.</p>
+    {% if grandes.picos %}
+      <div class="cards">
+        <div class="card card-hero">
+          <div class="card-label">Aparta cada mes</div>
+          <div class="card-value">{{ eur(grandes.aportacion) }} €</div>
+          <div class="card-sub">{{ eur(grandes.total) }} € de gastos grandes en {{ grandes.meses }} meses, repartidos; ya se resta del «libre» de Hoy</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Mes</th><th>Categoría</th><th class="num">Por encima de un mes normal</th></tr></thead>
+        <tbody>
+          {% for p in grandes.picos %}
+            <tr><td>{{ p.nombre }}</td><td>{{ p.etiqueta }}</td><td class="num">{{ eur(p.importe) }} €</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Ningún gasto grande en los últimos {{ grandes.meses }} meses.</p>
+    {% endif %}
+  </section>
+
+  <script src="/static/js/chart.min.js"></script>
+  <script>
+    const meses = {{ r.meses | tojson }};
+    const gastos = {{ r.total_gastos | tojson }};
+    const ingresos = {{ r.ingresos | tojson }};
+    const media = {{ r.media_mensual | tojson }};
+    new Chart(document.getElementById('chartAnual'), {
+      data: {
+        labels: meses.map(m => m.nombre),
+        datasets: [
+          { type: 'bar', label: 'Gastos', data: gastos,
+            backgroundColor: meses.map(m => m.estado === 'cerrado' ? '#b3261e' : 'rgba(179,38,30,0.35)') },
+          { type: 'line', label: 'Ingresos', data: ingresos, borderColor: '#0a6e4e', backgroundColor: '#0a6e4e' },
+          { type: 'line', label: 'Media de gasto', data: meses.map(() => media), borderColor: '#888',
+            borderDash: [6, 4], pointRadius: 0 },
+        ],
+      },
+    });
+  </script>
+{% endblock %}

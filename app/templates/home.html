@@ -7,7 +7,7 @@
     <tbody>
       {% for f in filas %}
         <tr{% if f.pendiente <= 0 %} class="inactive-row"{% endif %}>
-          <td>{{ f.etiqueta }}{% if f.origen == "media" %} <span class="tag">media</span>{% endif %}</td>
+          <td>{{ f.etiqueta }}{% if f.origen == "media" %} <span class="tag">media</span>{% elif f.origen == "habitual" %} <span class="tag" title="Tu gasto habitual supera el presupuesto: se reserva el habitual">gasto habitual</span>{% endif %}</td>
           <td>{{ "%.2f"|format(f.previsto) }} €</td>
           <td>{{ "%.2f"|format(f.gastado) }} €</td>
           <td>{{ "%.2f"|format(f.pendiente) }} €</td>
@@ -34,15 +34,24 @@
       <div class="card-value">{{ "%.2f"|format(d.saldo) }} €</div>
       <div class="card-sub">
         {% if d.fecha_saldo %}saldo del {{ d.fecha_saldo.strftime('%d/%m') }}{% else %}sin saldo sincronizado{% endif %}
-        {% if d.saldo_viejo %} · <a href="/conexiones">sincroniza</a> para afinarlo{% endif %}
+        {% if d.saldo_viejo %} · <a href="/conexiones">sincroniza</a> para afinarlo (botón «Sincronizar ahora»){% endif %}
       </div>
     </div>
     <div class="card">
       <div class="card-label">Ya tiene dueño</div>
       <div class="card-value negative">{{ "%.2f"|format(d.comprometido) }} €</div>
-      <div class="card-sub">recibos, necesidades, inversión y apartado anual que faltan</div>
+      <div class="card-sub">recibos, necesidades, inversión y huchas que faltan</div>
     </div>
   </div>
+
+  {% if pendientes %}
+    <section>
+      <h2>Pendiente</h2>
+      {% for p in pendientes %}
+        <p class="advice advice-{{ p.severidad }}"><a href="{{ p.url }}">{{ p.texto }}</a></p>
+      {% endfor %}
+    </section>
+  {% endif %}
 
   {% if d.ciclo.retrasada %}
     <p class="advice advice-warning">La nómina tocaba el {{ d.ciclo.siguiente.strftime('%d/%m') }} y aún no aparece.
@@ -77,10 +86,11 @@
         <tr><td>− Inversión comprometida que falta
               <span class="muted">({{ "%.2f"|format(d.inversion_hecha) }} € de {{ "%.2f"|format(d.inversion_prevista) }} € hechos)</span></td>
             <td>{{ "%.2f"|format(d.inversion_pendiente) }} €</td></tr>
-        <tr><td>− Apartado para gastos anuales</td><td>{{ "%.2f"|format(d.apartado_anual) }} €</td></tr>
+        <tr><td>− Hucha para pagos anuales (seguros, impuestos…)</td><td>{{ "%.2f"|format(d.apartado_anual) }} €</td></tr>
+        <tr><td>− Hucha para vacaciones y compras grandes</td><td>{{ "%.2f"|format(d.apartado_grandes) }} €</td></tr>
       </tbody>
       <tfoot>
-        <tr><th>= Libre para ocio y caprichos</th><th>{{ "%.2f"|format(d.libre) }} €</th></tr>
+        <tr><th>= Libre para gastar hasta la nómina</th><th>{{ "%.2f"|format(d.libre) }} €</th></tr>
       </tfoot>
     </table>
 
@@ -93,9 +103,9 @@
       {{ tabla_pendientes(d.variables_necesarios) }}
     {% endif %}
     {% if d.anuales %}
-      <h3>Apartado para gastos anuales</h3>
-      <p class="muted">La parte de este mes de los pagos anuales que aún quedan este año,
-         para que el seguro o el IBI no te pillen sin dinero cuando lleguen.</p>
+      <h3>Hucha para pagos anuales</h3>
+      <p class="muted">Se reservan {{ "%.2f"|format(d.apartado_anual) }} € cada mes para llegar a estos recibos
+         de los próximos 12 meses sin que te pillen sin dinero (detalle en <a href="/anual">Año</a>).</p>
       <table>
         <tbody>
           {% for a in d.anuales %}

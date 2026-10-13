@@ -6,8 +6,8 @@ from app.models import UserSettings
 MARGEN_PP = 5  # puntos porcentuales de margen antes de avisar
 
 
-def check(month_df: pd.DataFrame, settings: UserSettings) -> list[Advice]:
-    ingresos = month_df.loc[month_df["amount"] > 0, "amount"].sum()
+def check(month_df: pd.DataFrame, settings: UserSettings, ingresos: float) -> list[Advice]:
+    """`ingresos` es la base del mes (budget_service.ingresos_base), no se recalcula aquí."""
     if ingresos <= 0:
         return [
             Advice(
@@ -20,7 +20,7 @@ def check(month_df: pd.DataFrame, settings: UserSettings) -> list[Advice]:
         gasto = -month_df.loc[
             (month_df["amount"] < 0) & (month_df["budget_group"] == budget_group), "amount"
         ].sum()
-        return gasto / ingresos * 100
+        return float(gasto) / ingresos * 100 if gasto else 0.0
 
     pct_necesidad = pct("NECESIDAD")
     pct_deseo = pct("DESEO")

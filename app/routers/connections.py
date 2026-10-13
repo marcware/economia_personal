@@ -3,12 +3,15 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.integrations.enablebanking.auth_flow import create_session, start_authorization
 from app.integrations.enablebanking.client import EnableBankingClient, EnableBankingConfigError
-from app.models import Account, Bank, BankConnection, ConnectionStatus
+from app.integrations.enablebanking.sync_service import sync_all
+from app.models import Account, AccountBalance, Bank, BankConnection, ConnectionStatus
+from app.services import budget_service
 from app.templating import templates
 
 router = APIRouter(prefix="/conexiones", tags=["conexiones"])
@@ -21,16 +24,39 @@ ASPSPS = {
 }
 
 
-@router.get("", response_class=HTMLResponse)
-def conexiones_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def _pagina(request: Request, db: Session, **extra) -> HTMLResponse:
     connections = db.query(BankConnection).order_by(BankConnection.created_at.desc()).all()
     accounts = db.query(Account).order_by(Account.bank, Account.name).all()
     now = datetime.now(timezone.utc)
+    ultima_sync = dict(
+        db.query(AccountBalance.account_id, func.max(AccountBalance.recorded_at))
+        .group_by(AccountBalance.account_id)
+        .all()
+    )
     return templates.TemplateResponse(
         request,
         "connections.html",
-        {"connections": connections, "accounts": accounts, "aspsps": ASPSPS, "now": now},
+        {"connections": connections, "accounts": accounts, "aspsps": ASPSPS, "now": now,
+         "ultima_sync": ultima_sync, **extra},
     )
+
+
+@router.get("", response_class=HTMLResponse)
+def conexiones_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return _pagina(request, db)
+
+
+@router.post("/sincronizar", response_class=HTMLResponse)
+def sincronizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Lo mismo que scripts/sync_accounts.py, desde la interfaz y enseñando el resultado."""
+    try:
+        client = EnableBankingClient()
+    except EnableBankingConfigError as exc:
+        return _pagina(request, db, sync_error=str(exc))
+    filas = sync_all(db, client)
+    # Con los movimientos nuevos, los presupuestos de los meses abiertos se ponen al día.
+    budget_service.ajustar_meses_abiertos(db)
+    return _pagina(request, db, sync_filas=filas)
 
 
 @router.get("/conectar/{aspsp_key}")

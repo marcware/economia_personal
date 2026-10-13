@@ -4,7 +4,33 @@
   <h1>Conexiones bancarias</h1>
 
   <section>
+    <h2>Sincronizar movimientos</h2>
+    <p class="muted">Trae los movimientos y el saldo nuevos de las cuentas conectadas. No abre un permiso nuevo en el banco.</p>
+    <form method="post" action="/conexiones/sincronizar">
+      <button type="submit" class="button">Sincronizar ahora</button>
+    </form>
+    {% if sync_error %}
+      <p class="advice advice-danger">No se ha podido sincronizar: {{ sync_error }}</p>
+    {% elif sync_filas is defined %}
+      {% if not sync_filas %}
+        <p class="advice advice-warning">No hay ninguna cuenta conectada por API todavía.</p>
+      {% endif %}
+      {% for f in sync_filas %}
+        {% if f.error %}
+          <p class="advice advice-danger">{{ f.cuenta.bank.value }} · {{ f.cuenta.iban or f.cuenta.name }}: error — {{ f.error }}.
+             Si el permiso ha caducado, vuelve a conectar el banco aquí abajo.</p>
+        {% else %}
+          <p class="advice advice-info">{{ f.cuenta.bank.value }} · {{ f.cuenta.iban or f.cuenta.name }}:
+             {{ f.resultado.inserted }} movimiento{{ "s" if f.resultado.inserted != 1 }} nuevo{{ "s" if f.resultado.inserted != 1 }}
+             ({{ f.resultado.categorized }} clasificado{{ "s" if f.resultado.categorized != 1 }} solo{{ "s" if f.resultado.categorized != 1 }}).</p>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  </section>
+
+  <section>
     <h2>Conectar un banco</h2>
+    <p class="muted">Solo hace falta la primera vez y cuando caduca el permiso (cada 90 días aprox.).</p>
     <ul class="connect-list">
       {% for key, aspsp in aspsps.items() %}
         <li>
@@ -52,7 +78,7 @@
     {% else %}
       <table>
         <thead>
-          <tr><th>Banco</th><th>Nombre</th><th>IBAN</th></tr>
+          <tr><th>Banco</th><th>Nombre</th><th>IBAN</th><th>Última sincronización</th></tr>
         </thead>
         <tbody>
           {% for a in accounts %}
@@ -60,6 +86,7 @@
               <td>{{ a.bank.value }}</td>
               <td>{{ a.name }}</td>
               <td>{{ a.iban or '—' }}</td>
+              <td>{% if ultima_sync.get(a.id) %}{{ ultima_sync[a.id].strftime('%d/%m/%Y %H:%M') }}{% else %}—{% endif %}</td>
             </tr>
           {% endfor %}
         </tbody>

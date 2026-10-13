@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Categorizar pendientes{% endblock %}
 {% block content %}
+  {% import "_category_picker.html" as cp %}
   <h1>Categorizar pendientes (agrupado por comercio)</h1>
   <p>
     Estos son los movimientos "sin clasificar" agrupados por descripción exacta, del más repetido
@@ -24,14 +25,7 @@
             <td>
               <form method="post" action="/movimientos/categorizar-grupo" class="inline-form">
                 <input type="hidden" name="description_normalized" value="{{ g.descripcion }}">
-                <select name="category_id" required>
-                  <option value="" disabled selected>Elegir categoría…</option>
-                  {% for c in categories %}
-                    {% if c.parent_id %}
-                      <option value="{{ c.id }}">{{ c.parent.name }} · {{ c.name }}</option>
-                    {% endif %}
-                  {% endfor %}
-                </select>
+                {{ cp.picker() }}
                 <button type="submit" class="button-sm">Asignar</button>
               </form>
             </td>
@@ -39,5 +33,6 @@
         {% endfor %}
       </tbody>
     </table>
+    {{ cp.datalist(categories) }}
   {% endif %}
 {% endblock %}

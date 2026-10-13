@@ -26,7 +26,8 @@ def check(db: Session, year: int, month: int, month_df: pd.DataFrame) -> list[Ad
                 f"({gasto:.2f}€ de {limite:.2f}€).",
                 url,
             ))
-        elif fila["estado"] == "near":
+        # Un fijo pagado exacto va al 100 % todos los meses: no es un aviso.
+        elif fila["estado"] == "near" and not fila["recurrente"]:
             advices.append(Advice(
                 "presupuesto_categoria", "warning", f"Cerca del límite: {nombre}",
                 f"Vas al {fila['ratio']:.0f}% de tu presupuesto de {nombre} "

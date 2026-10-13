@@ -164,3 +164,18 @@ def sync_account(
         "categorized": categorized,
         "nuevos_candidatos_traspaso": nuevos_candidatos,
     }
+
+
+def sync_all(db: Session, client: EnableBankingClient) -> list[dict]:
+    """Sincroniza todas las cuentas enlazadas por API. Un fallo en una no impide las demás.
+
+    Devuelve una fila por cuenta: {"cuenta", "resultado" (el dict de sync_account) o "error"}.
+    """
+    filas = []
+    for account in db.query(Account).filter(Account.external_account_id.isnot(None)).all():
+        try:
+            filas.append({"cuenta": account, "resultado": sync_account(db, client, account), "error": None})
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            filas.append({"cuenta": account, "resultado": None, "error": str(exc)})
+    return filas

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.advisor.engine import get_advice
 from app.database import get_db
-from app.services import hormiga_service
+from app.services import budget_service, hormiga_service
 from app.services.dashboard_service import available_months, evolution, monthly_summary
 from app.templating import templates
 
@@ -27,6 +27,9 @@ def dashboard_home(
     next_month = months_available[idx - 1] if idx > 0 else None
 
     summary = monthly_summary(db, year, month)
+    # Mes abierto y sin la nómina cobrada: la tasa sobre lo ingresado no dice nada todavía.
+    base = budget_service.ingresos_base(db, year, month, summary["ingresos"])
+    ingresos_previstos = base if base > summary["ingresos"] else None
     trend = evolution(db, months=12)
     advices = get_advice(db, year, month)[:3]
     hormiga = hormiga_service.resumen(db, year, month)
@@ -37,6 +40,7 @@ def dashboard_home(
         {
             "sin_datos": False,
             "summary": summary,
+            "ingresos_previstos": ingresos_previstos,
             "trend": trend,
             "prev_month": prev_month,
             "next_month": next_month,

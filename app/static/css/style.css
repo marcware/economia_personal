@@ -319,6 +319,12 @@ th, td {
   font-weight: 700;
 }
 
+/* estados de hito */
+.badge.ok,
+.badge.cumplido { background: #1e7b34; }
+.badge.riesgo { background: #b8860b; }
+.badge.pendiente { background: #bbb; }
+
 .card-hero {
   border-color: var(--accent);
   border-width: 2px;
@@ -331,3 +337,25 @@ th, td {
 section.card {
   margin-bottom: 2rem;
 }
+
+/* vista anual (/anual) */
+.tabla-anual { overflow-x: auto; }
+.tabla-anual table { font-size: 0.85rem; white-space: nowrap; }
+.tabla-anual th, .tabla-anual td { padding: 0.3rem 0.5rem; }
+.tabla-anual tbody td:first-child, .tabla-anual tbody th:first-child,
+.tabla-anual thead th:first-child { position: sticky; left: 0; background: var(--bg); }
+.num { text-align: right !important; font-variant-numeric: tabular-nums; }
+td.prev { font-style: italic; color: #777; }
+td.aviso { background: #fff8e6; color: #8a5a00; }
+td.total { font-weight: 600; }
+th.en_curso { color: var(--accent); }
+th.previsto { color: #888; font-weight: normal; }
+tr.seccion th { padding-top: 1rem; font-size: 0.8rem; text-transform: uppercase; color: #666; }
+tr.subtotal th, tr.subtotal td { font-weight: 600; border-top: 2px solid var(--border); }
+tr.fuerte th, tr.fuerte td { font-size: 0.95rem; }
+tr.saldo th, tr.saldo td { font-weight: 600; }
+tr.ingresos td, tr.ingresos th { color: var(--accent); }
+
+/* selector de categoría con búsqueda (_category_picker.html) */
+.cat-picker { min-width: 18rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; }
+.cat-picker.cat-ok { border-color: var(--accent); }

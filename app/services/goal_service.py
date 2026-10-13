@@ -42,6 +42,10 @@ GOAL_LABEL: dict[GoalType, str] = {
 # Tipos que usan category_id.
 GOAL_NEEDS_CATEGORY = {GoalType.GASTO_MAX_CATEGORIA, GoalType.INVERSION_MIN}
 
+# Tipos que dependen de los ingresos del mes: con el mes en curso se miden contra los
+# ingresos previstos (ver _ingresos_base) y van bajando según se gasta, no subiendo.
+GOAL_SOBRE_INGRESOS = {GoalType.AHORRO_MIN, GoalType.TASA_AHORRO_MIN}
+
 
 def _inversion_del_mes(db: Session, gastos: dict[int, float], category_id: int | None) -> float:
     """Salidas hacia ahorro/inversión del mes, en euros positivos."""
@@ -53,7 +57,24 @@ def _inversion_del_mes(db: Session, gastos: dict[int, float], category_id: int |
     return sum(importe for cid, importe in gastos.items() if cid in hojas_ahorro)
 
 
-def _ahorro_real(summary: dict, invertido: float) -> float:
+def _mes_en_curso(year: int, month: int) -> bool:
+    hoy = date.today()
+    return (year, month) == (hoy.year, hoy.month)
+
+
+def _ingresos_base(db: Session, summary: dict) -> float:
+    """Ingresos contra los que medir el ahorro del mes.
+
+    La nómina entra hacia el 27, así que hasta entonces los ingresos reales del mes en
+    curso son cuatro Bizum y el ahorro sale absurdo (35 € de ingresos y la hipoteca ya
+    cobrada: tasa de -4.000 %). Mientras el mes está abierto se usan los ingresos
+    regulares previstos (los de budget_service.balance_mes) si son mayores que lo que
+    ha entrado; el número se lee como "así cerrarías si no gastaras nada más".
+    """
+    return budget_service.ingresos_base(db, summary["year"], summary["month"], summary["ingresos"])
+
+
+def _ahorro_real(summary: dict, invertido: float, ingresos: float) -> float:
     """Dinero no destinado a consumo: lo que sobra en la cuenta + lo invertido.
 
     monthly_summary calcula ahorro = ingresos - gastos, y los traspasos a Quanloop,
@@ -63,7 +84,7 @@ def _ahorro_real(summary: dict, invertido: float) -> float:
     Se le suma de vuelta lo invertido para que sea neutro: invertir ni ayuda ni
     perjudica a este número, solo mueve el dinero de "gasto" a "invertido".
     """
-    return summary["ahorro"] + invertido
+    return ingresos - summary["gastos"] + invertido
 
 
 def _actual(db: Session, goal: FinancialGoal, summary: dict, gastos: dict[int, float]) -> float | None:
@@ -74,12 +95,12 @@ def _actual(db: Session, goal: FinancialGoal, summary: dict, gastos: dict[int, f
     if goal.goal_type == GoalType.GASTO_MAX_TOTAL:
         return summary["gastos"] - invertido
     if goal.goal_type == GoalType.AHORRO_MIN:
-        return _ahorro_real(summary, invertido)
+        return _ahorro_real(summary, invertido, _ingresos_base(db, summary))
     if goal.goal_type == GoalType.INVERSION_MIN:
         return _inversion_del_mes(db, gastos, goal.category_id)
     if goal.goal_type == GoalType.TASA_AHORRO_MIN:
-        ingresos = summary["ingresos"]
-        return (_ahorro_real(summary, invertido) / ingresos * 100) if ingresos else None
+        ingresos = _ingresos_base(db, summary)
+        return (_ahorro_real(summary, invertido, ingresos) / ingresos * 100) if ingresos else None
     raise ValueError(f"Tipo de hito no soportado: {goal.goal_type}")
 
 
@@ -93,7 +114,7 @@ def _prorrata(year: int, month: int) -> float:
     return hoy.day / calendar.monthrange(year, month)[1] * 100
 
 
-def _estado(ratio: float, direccion: str, year: int, month: int) -> str:
+def _estado(ratio: float, direccion: str, year: int, month: int, sobre_ingresos: bool = False) -> str:
     hoy = date.today()
     if (year, month) > (hoy.year, hoy.month):
         return "pendiente"
@@ -106,6 +127,10 @@ def _estado(ratio: float, direccion: str, year: int, month: int) -> str:
             return "riesgo"
         return "cumplido" if cerrado else "ok"
 
+    if sobre_ingresos and not cerrado:
+        # Parte de los ingresos previstos y baja con cada gasto: hasta el cierre no está
+        # cumplido, y por debajo del objetivo ya no se recupera sin un ingreso extra.
+        return "ok" if ratio >= 100 else "riesgo"
     if ratio >= 100:
         return "cumplido"
     if cerrado:
@@ -144,7 +169,7 @@ def goal_rows(
                 ratio = (actual / objetivo * 100) if objetivo > 0 else 0.0
             else:
                 ratio = (actual / objetivo * 100) if objetivo > 0 else 100.0
-            estado = _estado(ratio, direccion, year, month)
+            estado = _estado(ratio, direccion, year, month, goal.goal_type in GOAL_SOBRE_INGRESOS)
 
         comparador = "≤" if direccion == "max" else "≥"
         filas.append({
@@ -155,7 +180,7 @@ def goal_rows(
             "objetivo": objetivo,
             "unidad": unidad,
             "direccion": direccion,
-            "ratio": min(ratio, 999),
+            "ratio": max(min(ratio, 999), 0),
             "estado": estado,
         })
     return filas

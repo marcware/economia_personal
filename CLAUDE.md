@@ -11,7 +11,7 @@ provides a monthly income/expense dashboard by category, a rule-based "financial
 per-month budgets with a fixed/variable/annual split, monthly financial goals ("hitos"), and a net-worth
 tracker. Server-rendered with FastAPI + Jinja2 (no frontend framework/build step).
 
-Core features are built and in daily use; there is no automated test suite (see below) — everything is
+Core features are built and in daily use; the automated tests are few (see below) — most things are
 verified by hand against the user's real data (`scripts/informe_mensual.py` is the standard way to do
 that). Don't rely on a phase-plan file under `~/.claude/plans/` for "current status" — those are
 per-session scratch plans and go stale; this file and `git log` are the durable record. When picking up
@@ -34,8 +34,11 @@ Then open https://localhost:8000. Enable Banking requires an HTTPS redirect URL 
 app on localhost, so the dev server always runs over TLS using a self-signed cert at
 `secrets/localhost.{key,crt}` (generated with OpenSSL, gitignored) — accept the browser warning once.
 
-No test suite exists yet (`pytest`/`pytest-asyncio` are declared as dev dependencies but there are no
-test files). No lint/format tooling is configured in `pyproject.toml`.
+Tests (`make test` / `pytest`) cover only the money arithmetic so far
+([tests/test_services/test_dinero.py](tests/test_services/test_dinero.py)): net spend, what counts as
+income, the pay cycle, the home page's "libre" and `copy_month`. They run on an in-memory SQLite built
+by [tests/conftest.py](tests/conftest.py) and never touch `data/economia.db`. No lint/format tooling is
+configured in `pyproject.toml`.
 
 ## Database and migrations
 
@@ -57,7 +60,8 @@ Enable Banking control panel. Auth is a signed RS256 JWT (app private key, `kid`
 must be renewed roughly every 90 days per PSD2. The connect/callback flow lives in
 [app/routers/connections.py](app/routers/connections.py) +
 [app/integrations/enablebanking/auth_flow.py](app/integrations/enablebanking/auth_flow.py); movement
-sync in [app/integrations/enablebanking/sync_service.py](app/integrations/enablebanking/sync_service.py).
+sync in [app/integrations/enablebanking/sync_service.py](app/integrations/enablebanking/sync_service.py)
+(`sync_all`, shared by `scripts/sync_accounts.py` and the "Sincronizar ahora" button on `/conexiones`).
 
 Banco Mediolanum has no Enable Banking coverage, so its movements are imported manually from an XLS
 export via [app/importers/mediolanum.py](app/importers/mediolanum.py) and
@@ -82,7 +86,7 @@ Layout is a standard layered FastAPI app under `app/`:
   re-exports everything and is imported by `migrations/env.py` so autogenerate picks up all tables —
   add new models there too.
 - **routers/** — one `APIRouter` per feature area (dashboard, transactions, budgets, categories,
-  connections, advice, notes, net_worth, transfer_candidates), each mounted in [app/main.py](app/main.py).
+  connections, advice, notes, net_worth, transfer_candidates, anual), each mounted in [app/main.py](app/main.py).
   Routers call into `services/`/`advisor/`/`categorization/` and render Jinja2 templates from
   `app/templates/` via the shared `templates` instance in [app/templating.py](app/templating.py)
   (which also injects template globals, e.g. the pending-transfer-candidates nav badge).
@@ -90,7 +94,17 @@ Layout is a standard layered FastAPI app under `app/`:
   net worth, transfer-candidate detection between own accounts).
   [budget_service.py](app/services/budget_service.py) is the single source of the
   gasto-real-vs-límite arithmetic (router, advisor and `informe_mensual.py` all call it — don't
-  recompute it locally); [goal_service.py](app/services/goal_service.py) is the equivalent for
+  recompute it locally). Spend there is *net of refunds*: a positive movement categorized in a
+  NECESIDAD/DESEO category (a Bizum paying back a share, a shop refund) subtracts from that category's
+  spend and can leave it negative when the refund lands in a different month than the charge; other
+  services (dashboard, advisor 50/30/20, anual) still count only negatives. Income, everywhere, is only
+  a positive movement in an INGRESO-group category (a loan paid into the account or a refund is not
+  income); `budget_service.ingresos_base` is the shared "income to measure the month against" (expected
+  income while the month is open) used by hitos, the 50/30/20 rule and the dashboard.
+  "Dinero de paso" (paid on someone's behalf and paid back: botes, the tenant's bills) is excluded from
+  both spend and income; `budget_service.dinero_de_paso` only lists it on `/presupuestos` with the
+  month's outstanding balance, and finds the category by its seed name (`CATEGORIA_DINERO_DE_PASO`).
+  [goal_service.py](app/services/goal_service.py) is the equivalent for
   monthly financial goals ("hitos").
   [disponible_service.py](app/services/disponible_service.py) powers the "Hoy" home page (`/`): what's
   free to spend *until the next payday*, not per calendar month — the salary lands ~27th and funds the
@@ -98,8 +112,16 @@ Layout is a standard layered FastAPI app under `app/`:
   `libre = saldo de cuentas API (sin Mediolanum) − fijos pendientes − necesidades variables pendientes −
   inversión pendiente − apartado anual`. The payday is auto-detected (largest INGRESO category); a pay
   cycle maps to the budget month it ends in (27 sep → 26 oct = octubre), using that month's budgets or,
-  if it has none, the median of the previous 3 months. It reuses `budget_service` for the investment
-  commitment and annual expenses rather than recomputing them.
+  if it has none, the median of the previous 3 months. For variable NECESIDAD categories it reserves the
+  larger of budget and that median (a too-low grocery ceiling must not inflate "libre"). It reuses
+  `budget_service` for the investment commitment and `anual_service.hucha_anual` for the annual set-aside
+  (the same figure `/anual` shows) rather than recomputing them. It also subtracts
+  `anual_service.hucha_grandes`: the monthly set-aside for big non-monthly discretionary spend
+  (holidays, electronics), derived from history — months where a variable DESEO category ran
+  ≥ `UMBRAL_PICO` over its 12-month median — with no category flag behind it.
+  [pendientes_service.py](app/services/pendientes_service.py) builds the short "Pendiente" strip on the
+  home page (budgets exceeded, hitos at risk, recent uncategorized movements, bank consent about to
+  expire); it only counts and links, the arithmetic stays in `budget_service`/`goal_service`.
   [hormiga_service.py](app/services/hormiga_service.py) measures "gastos hormiga" (≤20 € charges in
   non-recurrent DESEO categories or uncategorized) shown on the dashboard;
   [libertad_service.py](app/services/libertad_service.py) is the financial-independence panel on
@@ -107,6 +129,12 @@ Layout is a standard layered FastAPI app under `app/`:
   25 target and projections at a 4 % real return). The emergency fund counts only `ManualAssetEntry`
   rows flagged `liquido`; consumer debt is every declared liability whose name doesn't contain
   "hipoteca".
+  [anual_service.py](app/services/anual_service.py) powers `/anual`, the live version of the user's
+  old annual spreadsheet (`data/2026_Gastos.xlsx`): category × month grid where closed months are real
+  spend and the current/future months are a forecast (budget if any; for `anual` categories the same
+  month last year, never below the budget — flagged ⚠ when the budget is shorter; otherwise median of 3 /
+  trimmed mean of 6 closed months). Its `hucha_anual` gives the constant monthly set-aside that covers the
+  next 12 months of `anual` lump payments (only the excess over a normal month).
 - **categorization/** — rule-based auto-categorization. [engine.py](app/categorization/engine.py)
   applies the highest-priority active `CategorizationRule` whose (normalized) description pattern
   matches and whose amount sign matches; [normalize.py](app/categorization/normalize.py) normalizes
@@ -139,11 +167,18 @@ transactions yet) and copied forward month to month. Open months (current and fu
 already have budgets) also adapt on their own: `budget_service.ajustar_mes` adds a category with spend in
 ≥2 of the last 6 months (limit = monthly mean, rounded up to 5 €) and removes one with no spend in 6
 months — altas/bajas only, never recalculating existing limits, and never touching anything the user set,
-edited or removed by hand (`Budget.fijado`). It runs on opening `/presupuestos` and `/` and after
-`scripts/sync_accounts.py`; automatic changes are flagged in `Budget.ajuste_auto` and can be undone. `FinancialGoal`
+edited or removed by hand (`Budget.fijado`, which `copy_month` carries over, including hand-removed
+rows). It runs on opening `/presupuestos` and `/` and after
+`scripts/sync_accounts.py`; automatic changes are flagged in `Budget.ajuste_auto` and can be undone. The month's budget total is a
+sum of ceilings, not "what you can spend": `budget_service.balance_mes` puts it next to expected income
+(median of the last 3 closed months of each *regular* INGRESO category — present every month with a
+stable amount, so nómina/alquiler count and Bizum refunds don't) and splits the margin into investment,
+what stays in Mediolanum after the transfer to ING (the colchón — savings, not spend) and unassigned. `FinancialGoal`
 ([app/models/goal.py](app/models/goal.py)) is the analogous per-month row for hitos, a closed
 `GoalType` enum rather than a rules DSL — extend the enum + `goal_service._actual`/`_estado` dispatch for
-a new kind of goal, don't add a generic expression language.
+a new kind of goal, don't add a generic expression language. Income-based hitos (`AHORRO_MIN`,
+`TASA_AHORRO_MIN`) measure the open month against `budget_service.ingresos_previstos`, not real income
+— the salary lands ~27th, so until then real income is near zero and the rate would be absurd.
 
 `scripts/` holds standalone maintenance/reporting scripts run directly with `python scripts/<name>.py`
 against a real `SessionLocal()` (seeding categories, bulk/re-categorization, account sync, monthly

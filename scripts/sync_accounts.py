@@ -6,8 +6,7 @@ Uso:
 
 from app.database import SessionLocal
 from app.integrations.enablebanking.client import EnableBankingClient
-from app.integrations.enablebanking.sync_service import sync_account
-from app.models import Account
+from app.integrations.enablebanking.sync_service import sync_all
 from app.services import budget_service
 
 
@@ -15,17 +14,14 @@ def main() -> None:
     db = SessionLocal()
     client = EnableBankingClient()
     try:
-        accounts = db.query(Account).all()
-        if not accounts:
+        filas = sync_all(db, client)
+        if not filas:
             print("No hay cuentas vinculadas todavía.")
             return
-        for account in accounts:
-            print(f"Sincronizando {account.bank.value} · {account.name} ({account.iban})...")
-            try:
-                result = sync_account(db, client, account)
-                print(f"  -> {result}")
-            except Exception as exc:  # noqa: BLE001
-                print(f"  -> ERROR: {exc}")
+        for fila in filas:
+            account = fila["cuenta"]
+            print(f"{account.bank.value} · {account.name} ({account.iban})")
+            print(f"  -> ERROR: {fila['error']}" if fila["error"] else f"  -> {fila['resultado']}")
         # Con los movimientos nuevos, los presupuestos de los meses abiertos se ponen al día.
         budget_service.ajustar_meses_abiertos(db)
     finally:

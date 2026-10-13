@@ -1,0 +1,67 @@
+{# Selector de categoría con búsqueda: se escribe parte del nombre ("gaso", "super",
+   "traspaso") y salen las coincidencias. Un <datalist> por página (datalist(...)) y un
+   picker(...) por formulario; el picker rellena el category_id oculto que recibe el POST. #}
+
+{% macro picker(selected=None, placeholder="Escribe para buscar…") %}
+  <input type="text" class="cat-picker" list="categorias-list" placeholder="{{ placeholder }}"
+         value="{{ (selected.parent.name ~ ' · ' ~ selected.name) if selected else '' }}" autocomplete="off" required>
+  <input type="hidden" name="category_id" value="{{ selected.id if selected else '' }}">
+{% endmacro %}
+
+{% macro datalist(leaves) %}
+  <datalist id="categorias-list">
+    {% for c in leaves %}
+      <option value="{{ c.parent.name }} · {{ c.name }}" data-id="{{ c.id }}"></option>
+    {% endfor %}
+  </datalist>
+  <script>
+    (function () {
+      const opciones = Array.from(document.querySelectorAll('#categorias-list option'))
+        .map(o => ({ label: o.value, id: o.dataset.id }));
+      const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+      // Coincidencia exacta; si no, la única categoría que contiene todo lo escrito
+      // (sin tildes ni mayúsculas, en cualquier orden: "gas vehic" -> Gasolina).
+      function resolver(texto) {
+        const t = norm(texto);
+        if (!t) return null;
+        const exacta = opciones.find(o => norm(o.label) === t);
+        if (exacta) return exacta;
+        const palabras = t.split(/\s+/);
+        const candidatas = opciones.filter(o => palabras.every(p => norm(o.label).includes(p)));
+        return candidatas.length === 1 ? candidatas[0] : null;
+      }
+
+      document.querySelectorAll('.cat-picker').forEach(input => {
+        const oculto = input.nextElementSibling;
+        const actualizar = () => {
+          const o = resolver(input.value);
+          oculto.value = o ? o.id : '';
+          input.setCustomValidity(o || !input.value ? '' : 'Elige una categoría de la lista');
+          input.classList.toggle('cat-ok', !!o);
+        };
+        input.addEventListener('input', actualizar);
+        input.addEventListener('focus', () => input.select());
+        input.form.addEventListener('submit', e => {
+          const o = resolver(input.value);
+          if (!o) {
+            e.preventDefault();
+            input.setCustomValidity('Elige una categoría de la lista');
+            input.reportValidity();
+            return;
+          }
+          input.value = o.label;
+          oculto.value = o.id;
+        });
+        if (oculto.value) input.classList.add('cat-ok');
+      });
+
+      // Para ir solo con teclado: al cargar (también al volver tras guardar), el cursor
+      // ya está en el primer movimiento sin categoría. Escribir, Intro elige la sugerencia,
+      // Intro guarda, y la página vuelve con el cursor en el siguiente.
+      const pickers = Array.from(document.querySelectorAll('.cat-picker'));
+      const primero = pickers.find(i => !i.nextElementSibling.value) || pickers[0];
+      if (primero) primero.focus({ preventScroll: false });
+    })();
+  </script>
+{% endmacro %}

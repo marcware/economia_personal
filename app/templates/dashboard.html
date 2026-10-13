@@ -25,6 +25,9 @@
       <div class="card">
         <div class="card-label">Ingresado</div>
         <div class="card-value positive">{{ "%.2f"|format(summary.ingresos) }} €</div>
+        {% if summary.otros_abonos %}
+          <div class="card-sub">aparte, {{ "%.2f"|format(summary.otros_abonos) }} € de devoluciones y otros abonos</div>
+        {% endif %}
       </div>
       <div class="card">
         <div class="card-label">Gastado</div>
@@ -34,7 +37,9 @@
         <div class="card-label">Ahorrado</div>
         <div class="card-value {{ 'positive' if summary.ahorro >= 0 else 'negative' }}">
           {{ "%.2f"|format(summary.ahorro) }} €
-          {% if summary.tasa_ahorro is not none %}
+          {% if ingresos_previstos %}
+            <span class="card-sub">(mes en curso: faltan ingresos por entrar; previstos {{ "%.2f"|format(ingresos_previstos) }} €)</span>
+          {% elif summary.tasa_ahorro is not none %}
             <span class="card-sub">({{ summary.tasa_ahorro }}% de los ingresos)</span>
           {% endif %}
         </div>

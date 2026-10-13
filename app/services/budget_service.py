@@ -7,6 +7,7 @@ router y en el advisor, con entradas ligeramente distintas.
 """
 
 import math
+import statistics
 from datetime import date
 
 import pandas as pd
@@ -14,7 +15,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.advisor.data import load_transactions_df
-from app.models import Budget, BudgetGroup, Category, FinancialGoal, GoalType, Transaction
+from app.models import (
+    Account, Bank, Budget, BudgetGroup, Category, FinancialGoal, GoalType, Transaction,
+)
 from app.services.dashboard_service import MONTHS_ES, available_months
 
 # A partir de este ratio el presupuesto se marca como "cerca del límite".
@@ -27,6 +30,8 @@ MESES_FUTUROS_SELECCIONABLES = 3
 # el mes en curso, y en cuántos de ellos tiene que haber gasto para añadir un presupuesto.
 # Pedir 2 meses evita que una compra puntual (un ordenador) cree un tope mensual.
 VENTANA_AJUSTE_MESES = 6
+# Meses cerrados de la columna "media" de /presupuestos (ver media_gasto_reciente).
+MESES_MEDIA_GASTO = 6
 MESES_CON_GASTO_PARA_AÑADIR = 2
 
 
@@ -43,14 +48,45 @@ def _month_df(db: Session, year: int, month: int, month_df: pd.DataFrame | None)
 def month_expense_by_category(
     db: Session, year: int, month: int, month_df: pd.DataFrame | None = None
 ) -> dict[int, float]:
-    """Gasto del mes por categoría hoja, en euros positivos. Excluye traspasos."""
+    """Gasto neto del mes por categoría hoja, en euros positivos. Excluye traspasos.
+
+    Neto = cargos menos devoluciones (ver month_refunds_by_category): si pago la gasolina
+    y me devuelven 35 € por Bizum, mi gasto en gasolina es el cargo menos esos 35 €. Puede
+    salir negativo cuando la devolución cae en un mes distinto al del cargo (reposto el 27
+    y me lo devuelven el 5): ese mes la categoría tiene saldo a favor.
+    """
     df = _month_df(db, year, month, month_df)
     if df.empty:
         return {}
-    gastos = df.loc[df["amount"] < 0]
-    if gastos.empty:
+    serie = -df.loc[df["amount"] < 0].groupby("category_id")["amount"].sum()
+    neto = {int(cid): float(importe) for cid, importe in serie.items() if pd.notna(cid)}
+    for cid, importe in month_refunds_by_category(db, year, month, df).items():
+        neto[cid] = neto.get(cid, 0.0) - importe
+    return neto
+
+
+def _hace_un_año(d: date) -> date:
+    try:
+        return d.replace(year=d.year - 1)
+    except ValueError:  # 29 de febrero
+        return d.replace(year=d.year - 1, day=28)
+
+
+# Grupos donde un movimiento positivo es una devolución que resta gasto. En AHORRO sería
+# un reembolso de inversión y en INGRESO/EXCLUIDO no hay gasto que compensar.
+GRUPOS_CON_DEVOLUCION = {BudgetGroup.NECESIDAD.value, BudgetGroup.DESEO.value}
+
+
+def month_refunds_by_category(
+    db: Session, year: int, month: int, month_df: pd.DataFrame | None = None
+) -> dict[int, float]:
+    """Devoluciones del mes por categoría hoja: movimientos positivos clasificados en una
+    categoría de gasto (alguien me devuelve su parte, un comercio abona una compra)."""
+    df = _month_df(db, year, month, month_df)
+    if df.empty:
         return {}
-    serie = -gastos.groupby("category_id")["amount"].sum()
+    abonos = df.loc[(df["amount"] > 0) & df["budget_group"].isin(GRUPOS_CON_DEVOLUCION)]
+    serie = abonos.groupby("category_id")["amount"].sum()
     return {int(cid): float(importe) for cid, importe in serie.items() if pd.notna(cid)}
 
 
@@ -63,6 +99,29 @@ def _estado(ratio: float) -> str:
     return "ok"
 
 
+def media_gasto_reciente(db: Session, hoy: date | None = None) -> dict[int, float]:
+    """Gasto medio mensual por categoría en los MESES_MEDIA_GASTO meses cerrados anteriores
+    a hoy (los meses sin gasto cuentan como 0). Es solo una referencia para leer el límite:
+    cuánto se gasta de verdad frente a lo que se ha puesto de tope."""
+    hoy = hoy or date.today()
+    fin = date(hoy.year, hoy.month, 1)
+    y, m = divmod(fin.year * 12 + fin.month - 1 - MESES_MEDIA_GASTO, 12)
+    inicio = date(y, m + 1, 1)
+    filas = (
+        db.query(Transaction.category_id, func.sum(Transaction.amount))
+        .filter(
+            Transaction.category_id.isnot(None),
+            Transaction.amount < 0,
+            Transaction.is_transfer.is_(False),
+            Transaction.date >= inicio,
+            Transaction.date < fin,
+        )
+        .group_by(Transaction.category_id)
+        .all()
+    )
+    return {cid: -float(total) / MESES_MEDIA_GASTO for cid, total in filas}
+
+
 def budget_rows(
     db: Session, year: int, month: int, month_df: pd.DataFrame | None = None
 ) -> list[dict]:
@@ -73,7 +132,9 @@ def budget_rows(
     — así siempre se sabe dónde buscar una categoría concreta.
     """
     gastos = month_expense_by_category(db, year, month, month_df)
+    devuelto = month_refunds_by_category(db, year, month, month_df)
     budgets = db.query(Budget).filter_by(active=True, year=year, month=month).all()
+    medias = media_gasto_reciente(db)
 
     filas = []
     for b in budgets:
@@ -87,9 +148,11 @@ def budget_rows(
             "recurrente": b.category.recurrente,
             "virtual": False,
             "gasto": gasto,
+            "devuelto": devuelto.get(b.category_id, 0.0),
+            "media": medias.get(b.category_id, 0.0),
             "limite": limite,
             "restante": limite - gasto,
-            "ratio": min(ratio, 999),
+            "ratio": max(min(ratio, 999), 0),
             "estado": _estado(ratio),
         })
     filas.sort(key=lambda f: (not f["recurrente"], f["etiqueta"]))
@@ -128,7 +191,7 @@ def inversion_esperada(db: Session, year: int, month: int) -> float:
         return float(hito.target_amount)
 
     hoy = date.today()
-    trailing_inicio = date(hoy.year - 1, hoy.month, hoy.day)
+    trailing_inicio = _hace_un_año(hoy)
     total = (
         db.query(func.sum(Transaction.amount))
         .join(Category, Category.id == Transaction.category_id)
@@ -179,6 +242,7 @@ def _fila_inversion(db: Session, year: int, month: int, month_df: pd.DataFrame |
         "etiqueta": "Inversión · Otras inversiones",
         "recurrente": True,
         "virtual": True,
+        "media": 0.0,
         "gasto": gastado,
         "limite": objetivo,
         "restante": max(objetivo - gastado, 0.0),
@@ -202,11 +266,12 @@ def budget_summary(
     if fila_inversion is not None:
         filas = sorted([*filas, fila_inversion], key=lambda f: (not f["recurrente"], f["etiqueta"]))
     gastos = month_expense_by_category(db, year, month, df)
+    devuelto = month_refunds_by_category(db, year, month, df)
 
     presupuestadas = {f["budget"].category_id for f in filas if f["budget"] is not None}
     sin_presupuesto = []
     for cid, gasto in sorted(gastos.items(), key=lambda kv: -kv[1]):
-        if cid in presupuestadas:
+        if cid in presupuestadas or gasto <= 0:
             continue
         categoria = db.get(Category, cid)
         if categoria is None or categoria.is_transfer_category:
@@ -221,6 +286,7 @@ def budget_summary(
             "etiqueta": f"{categoria.parent.name} · {categoria.name}" if categoria.parent else categoria.name,
             "recurrente": categoria.recurrente,
             "gasto": gasto,
+            "devuelto": devuelto.get(cid, 0.0),
         })
     sin_presupuesto.sort(key=lambda f: (not f["recurrente"], -f["gasto"]))
 
@@ -242,6 +308,153 @@ def budget_summary(
         "sin_presupuesto": sin_presupuesto,
         "sin_presupuesto_fijos": [f for f in sin_presupuesto if f["recurrente"]],
         "sin_presupuesto_variables": [f for f in sin_presupuesto if not f["recurrente"]],
+    }
+
+
+
+# Balance del mes (ver balance_mes): meses naturales cerrados que se miran para prever los
+# ingresos, y cuánto puede oscilar un ingreso entre esos meses para contar como regular.
+MESES_INGRESOS = 3
+ESTABILIDAD_INGRESO = 0.8
+
+
+def _ingresos_por_mes(
+    db: Session, meses: list[tuple[int, int]], solo_mediolanum: bool = False
+) -> dict[int, dict[tuple[int, int], float]]:
+    """Ingresos (sin traspasos) por categoría INGRESO y mes natural."""
+    ym = func.strftime("%Y-%m", Transaction.date)
+    q = (
+        db.query(Transaction.category_id, ym, func.sum(Transaction.amount))
+        .join(Category, Category.id == Transaction.category_id)
+        .filter(
+            Category.budget_group == BudgetGroup.INGRESO,
+            Transaction.amount > 0,
+            Transaction.is_transfer.is_(False),
+            ym.in_([f"{y}-{m:02d}" for y, m in meses]),
+        )
+    )
+    if solo_mediolanum:
+        q = q.join(Account, Account.id == Transaction.account_id).filter(Account.bank == Bank.MEDIOLANUM)
+    out: dict[int, dict[tuple[int, int], float]] = {}
+    for cid, clave, total in q.group_by(Transaction.category_id, ym).all():
+        y, m = clave.split("-")
+        out.setdefault(cid, {})[(int(y), int(m))] = float(total)
+    return out
+
+
+def _es_regular(por_mes: dict[tuple[int, int], float], meses: list[tuple[int, int]]) -> bool:
+    """Entra todos los meses y con un importe parecido (nómina, alquiler; no los Bizum)."""
+    importes = [por_mes.get(ym, 0.0) for ym in meses]
+    return min(importes) > 0 and min(importes) >= ESTABILIDAD_INGRESO * max(importes)
+
+
+def _meses_ingresos(year: int, month: int) -> list[tuple[int, int]]:
+    """Los MESES_INGRESOS meses cerrados anteriores al mes dado (o a hoy, si es futuro)."""
+    hoy = date.today()
+    referencia = min((year, month), (hoy.year, hoy.month))
+    anterior = (referencia[0] - 1, 12) if referencia[1] == 1 else (referencia[0], referencia[1] - 1)
+    return _meses_atras(date(*anterior, 1), MESES_INGRESOS)
+
+
+def ingresos_base(db: Session, year: int, month: int, ingresos_reales: float) -> float:
+    """Ingresos contra los que medir el mes (hitos de ahorro, regla 50/30/20).
+
+    La nómina entra hacia el 27, así que hasta entonces los ingresos reales del mes en
+    curso son cuatro Bizum y cualquier porcentaje sale absurdo (35 € de ingresos y la
+    hipoteca ya cobrada: tasa de -4.000 %). Mientras el mes está abierto se usan los
+    ingresos regulares previstos si son mayores que lo que ha entrado; el número se lee
+    como "así cerrarías si no gastaras nada más".
+    """
+    hoy = date.today()
+    if (year, month) == (hoy.year, hoy.month):
+        return max(ingresos_reales, ingresos_previstos(db, year, month))
+    return ingresos_reales
+
+
+def ingresos_previstos(db: Session, year: int, month: int) -> float:
+    """Total de ingresos regulares previstos para el mes (los mismos de balance_mes)."""
+    meses = _meses_ingresos(year, month)
+    return sum(
+        statistics.median(por_mes[ym] for ym in meses)
+        for por_mes in _ingresos_por_mes(db, meses).values()
+        if _es_regular(por_mes, meses)
+    )
+
+
+def balance_mes(db: Session, year: int, month: int, resumen: dict) -> dict | None:
+    """Ingresos previstos del mes frente a lo presupuestado: cuánto margen queda y a dónde va.
+
+    El total del presupuesto es una suma de topes de gasto; sin ponerlo al lado de lo que
+    entra no dice si el plan cabe. Aquí:
+
+        margen = ingresos regulares previstos - gasto presupuestado (fijos + variables)
+        margen = inversión + colchón en Mediolanum + sin asignar
+
+    La inversión y lo que se queda en Mediolanum no son gasto (es dinero que sigue siendo
+    tuyo), así que se enseñan como destino del margen, no restando como un gasto más.
+
+    Los ingresos previstos son la mediana de los últimos MESES_INGRESOS meses cerrados de
+    cada ingreso regular (ver _es_regular). El colchón es lo que, de esos ingresos, se
+    queda en Mediolanum después de traspasar a las demás cuentas.
+    """
+    meses = _meses_ingresos(year, month)
+
+    ingresos = []
+    for cid, por_mes in _ingresos_por_mes(db, meses).items():
+        if not _es_regular(por_mes, meses):
+            continue
+        categoria = db.get(Category, cid)
+        ingresos.append({
+            "categoria": categoria,
+            "importe": statistics.median(por_mes[ym] for ym in meses),
+        })
+    if not ingresos:
+        return None
+    ingresos.sort(key=lambda i: -i["importe"])
+    total_ingresos = sum(i["importe"] for i in ingresos)
+
+    # Colchón: ingresos regulares que caen en Mediolanum menos lo que sale de allí por
+    # traspaso a cuentas propias, mes a mes.
+    regulares = {i["categoria"].id for i in ingresos}
+    entra_mediolanum = _ingresos_por_mes(db, meses, solo_mediolanum=True)
+    ym = func.strftime("%Y-%m", Transaction.date)
+    traspasos = dict(
+        db.query(ym, func.sum(Transaction.amount))
+        .join(Account, Account.id == Transaction.account_id)
+        .filter(
+            Account.bank == Bank.MEDIOLANUM,
+            Transaction.is_transfer.is_(True),
+            Transaction.amount < 0,
+            ym.in_([f"{y}-{m:02d}" for y, m in meses]),
+        )
+        .group_by(ym)
+        .all()
+    )
+    retenido = [
+        sum(entra_mediolanum.get(cid, {}).get((y, m), 0.0) for cid in regulares)
+        + float(traspasos.get(f"{y}-{m:02d}") or 0)
+        for y, m in meses
+    ]
+    colchon = max(statistics.median(retenido), 0.0)
+
+    inversion = sum(f["limite"] for f in resumen["filas"] if f["virtual"])
+    gasto_presupuestado = resumen["total_limite"] - inversion
+    margen = total_ingresos - gasto_presupuestado
+
+    return {
+        "meses": [f"{MONTHS_ES[m].lower()}" for _, m in meses],
+        "ingresos": ingresos,
+        "total_ingresos": total_ingresos,
+        "fijos": resumen["fijos"]["total_limite"] - inversion,
+        "variables": resumen["variables"]["total_limite"],
+        "gasto_presupuestado": gasto_presupuestado,
+        "margen": margen,
+        "inversion": inversion,
+        "colchon": colchon,
+        "sin_asignar": margen - inversion - colchon,
+        # Lo que llega a las cuentas del día a día y lo que sale de ellas según el plan.
+        "llega_a_cuentas": total_ingresos - colchon,
+        "ratio_gasto": gasto_presupuestado / total_ingresos * 100,
     }
 
 
@@ -323,7 +536,12 @@ def copy_month(
     destino: tuple[int, int],
     sobrescribir: bool = False,
 ) -> int:
-    """Copia los presupuestos activos de un mes a otro. Devuelve cuántos ha escrito."""
+    """Copia los presupuestos activos de un mes a otro. Devuelve cuántos ha escrito.
+
+    Lo decidido a mano viaja con la copia: un límite fijado sigue fijado y una categoría
+    quitada a mano sigue quitada, para que el ajuste automático no lo deshaga en el mes
+    de destino.
+    """
     origen_year, origen_month = origen
     destino_year, destino_month = destino
     if origen == destino:
@@ -337,8 +555,26 @@ def copy_month(
     for b in db.query(Budget).filter_by(year=origen_year, month=origen_month, active=True).all():
         if b.category_id in existentes and not sobrescribir:
             continue
-        upsert_budget(db, b.category_id, destino_year, destino_month, float(b.monthly_limit))
+        upsert_budget(
+            db, b.category_id, destino_year, destino_month, float(b.monthly_limit),
+            fijado=True if b.fijado else None,
+        )
         copiados += 1
+
+    en_destino = {
+        b.category_id for b in db.query(Budget).filter_by(year=destino_year, month=destino_month).all()
+    }
+    quitados = db.query(Budget).filter_by(
+        year=origen_year, month=origen_month, active=False, fijado=True
+    ).all()
+    for b in quitados:
+        if b.category_id not in en_destino:
+            db.add(Budget(
+                category_id=b.category_id, year=destino_year, month=destino_month,
+                monthly_limit=b.monthly_limit, active=False, fijado=True,
+            ))
+    if quitados:
+        db.commit()
     return copiados
 
 
@@ -499,6 +735,57 @@ def deshacer_ajuste(db: Session, budget_id: int) -> None:
     db.commit()
 
 
+# Nombre de la categoría (ver seed_rules) de lo que se paga por otros y vuelve: botes,
+# recibos de la inquilina. No hay un flag propio: comparte EXCLUIDO + traspaso con
+# "Traspaso entre cuentas".
+CATEGORIA_DINERO_DE_PASO = "Dinero de paso (botes)"
+
+
+def dinero_de_paso(db: Session, year: int, month: int) -> dict | None:
+    """Lo adelantado por otros y lo devuelto en el mes, con el saldo que queda entre ambos.
+
+    Estos movimientos están excluidos de gasto e ingreso (por eso no salen en ninguna fila
+    del presupuesto); aquí solo se enseñan para poder comprobar que lo adelantado ha vuelto.
+    `saldo` < 0: falta que te devuelvan; > 0: te han dado más de lo que has pagado.
+    `saldo_año` es lo mismo desde enero hasta el final de este mes: lo adelantado un mes y
+    devuelto al siguiente descuadra los dos meses, pero ahí se compensa.
+    """
+    siguiente = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    movimientos = (
+        db.query(Transaction)
+        .join(Category, Category.id == Transaction.category_id)
+        .filter(
+            Category.name == CATEGORIA_DINERO_DE_PASO,
+            Transaction.date >= date(year, month, 1),
+            Transaction.date < siguiente,
+        )
+        .order_by(Transaction.date, Transaction.id)
+        .all()
+    )
+    saldo_año = (
+        db.query(func.sum(Transaction.amount))
+        .join(Category, Category.id == Transaction.category_id)
+        .filter(
+            Category.name == CATEGORIA_DINERO_DE_PASO,
+            Transaction.date >= date(year, 1, 1),
+            Transaction.date < siguiente,
+        )
+        .scalar()
+    )
+    saldo_año = round(float(saldo_año or 0), 2)
+    if not movimientos and not saldo_año:
+        return None
+    adelantado = float(-sum(t.amount for t in movimientos if t.amount < 0))
+    devuelto = float(sum(t.amount for t in movimientos if t.amount > 0))
+    return {
+        "movimientos": movimientos,
+        "adelantado": adelantado,
+        "devuelto": devuelto,
+        "saldo": round(devuelto - adelantado, 2),
+        "saldo_año": saldo_año,
+    }
+
+
 def _gasto_categoria_entre(db: Session, category_id: int, desde: date, hasta: date) -> float:
     total = (
         db.query(func.sum(Transaction.amount))
@@ -531,7 +818,7 @@ def gastos_anuales(db: Session, year: int) -> list[dict]:
     hoy = date.today()
     inicio_año = date(year, 1, 1)
     fin_ytd = date(year, 12, 31) if year < hoy.year else hoy
-    trailing_inicio = date(hoy.year - 1, hoy.month, hoy.day)
+    trailing_inicio = _hace_un_año(hoy)
 
     if year > hoy.year:
         meses_restantes = 12

@@ -28,7 +28,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup, Category, Transaction
-from app.services import budget_service
+from app.services import anual_service, budget_service
 from app.services.dashboard_service import MONTHS_ES
 
 # Meses naturales cerrados que se usan para estimar un gasto cuando no hay presupuesto.
@@ -191,6 +191,12 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
 
         if cat.id in presupuestos:
             previsto, origen = presupuestos[cat.id], "presupuesto"
+            if not cat.recurrente:
+                # Un tope de súper más bajo que lo que de verdad gastas no hace que comas
+                # menos: para lo que hay que reservar manda el gasto habitual si es mayor.
+                habitual = _mediana_mensual(db, cat.id, year, month)
+                if habitual > previsto:
+                    previsto, origen = habitual, "habitual"
         else:
             previsto, origen = _mediana_mensual(db, cat.id, year, month), "media"
         ya = gastado.get(cat.id, 0.0)
@@ -216,17 +222,23 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
     inversion_hecha = sum(v for cid, v in gastado.items() if cid in ids_ahorro)
     inversion_pendiente = max(inversion_prevista - inversion_hecha, 0.0)
 
-    apartado_anual = 0.0
-    anuales = []
-    for g in budget_service.gastos_anuales(db, hoy.year):
-        if g["categoria"].id in anuales_presupuestadas or not g["por_mes_restante"]:
-            continue
-        apartado_anual += g["por_mes_restante"]
-        anuales.append({"etiqueta": g["etiqueta"], "importe": g["por_mes_restante"]})
+    # La misma hucha que /anual: cuota constante que llega a los recibos de los próximos
+    # 12 meses (empieza el mes que viene, así que no duplica lo presupuestado en este).
+    hucha = anual_service.hucha_anual(db, hoy)
+    apartado_anual = hucha["aportacion"]
+    anuales = [
+        {"etiqueta": f"{c['etiqueta']} ({m['nombre'].lower()})", "importe": c["importe"]}
+        for m in hucha["meses"] for c in m["conceptos"]
+    ]
+
+    # Y la de los gastos gordos que no son mensuales (vacaciones, un portátil): si no se
+    # reservan mes a mes, el día que llegan se pagan con préstamo.
+    grandes = anual_service.hucha_grandes(db, hoy)
+    apartado_grandes = grandes["aportacion"]
 
     total_fijos = sum(f["pendiente"] for f in fijos)
     total_variables = sum(f["pendiente"] for f in variables_necesarios)
-    comprometido = total_fijos + total_variables + inversion_pendiente + apartado_anual
+    comprometido = total_fijos + total_variables + inversion_pendiente + apartado_anual + apartado_grandes
     libre = saldo - comprometido
     dias = max((ciclo["siguiente"] - hoy).days, 1)
 
@@ -248,6 +260,8 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
         "inversion_pendiente": inversion_pendiente,
         "anuales": anuales,
         "apartado_anual": apartado_anual,
+        "grandes": grandes,
+        "apartado_grandes": apartado_grandes,
         "comprometido": comprometido,
         "libre": libre,
         "dias": dias,
