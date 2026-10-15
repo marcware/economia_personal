@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import BankConnection, Transaction
 from app.services import budget_service, goal_service
+from app.formato import eur
 
 # Los movimientos sin clasificar más viejos que esto ya no son tarea del día.
 DIAS_SIN_CLASIFICAR = 60
@@ -31,7 +32,7 @@ def pendientes(db: Session, hoy: date | None = None) -> list[dict]:
         exceso = sum(f["gasto"] - f["limite"] for f in superados)
         filas.append({
             "texto": f"{_plural(len(superados), 'presupuesto superado', 'presupuestos superados')} "
-                     f"(+{exceso:.2f} € sobre lo previsto)",
+                     f"(+{eur(exceso)} sobre lo previsto)",
             "url": f"/presupuestos?year={year}&month={month}",
             "severidad": "danger",
         })

@@ -6,7 +6,7 @@
   <section>
     <h2>Sincronizar movimientos</h2>
     <p class="muted">Trae los movimientos y el saldo nuevos de las cuentas conectadas. No abre un permiso nuevo en el banco.</p>
-    <form method="post" action="/conexiones/sincronizar">
+    <form method="post" action="/conexiones/sincronizar" data-aviso="Sincronización terminada" data-enviando="Sincronizando…">
       <button type="submit" class="button">Sincronizar ahora</button>
     </form>
     {% if sync_error %}
@@ -43,7 +43,7 @@
   <section>
     <h2>Consentimientos activos</h2>
     {% if not connections %}
-      <p>Todavía no has conectado ningún banco.</p>
+      <p class="empty">Todavía no has conectado ningún banco.</p>
     {% else %}
       <table>
         <thead>
@@ -53,12 +53,15 @@
           {% for c in connections %}
             <tr>
               <td>{{ c.aspsp_name }}</td>
-              <td>{{ c.status.value }}</td>
+              <td><span class="badge {{ "ok" if c.status.value == "ACTIVE" else "" }}">{{ {"ACTIVE": "activo", "EXPIRED": "caducado", "REVOKED": "revocado"}.get(c.status.value, c.status.value) }}</span></td>
               <td>
                 {% if c.consent_valid_until %}
                   {{ c.consent_valid_until.strftime('%d/%m/%Y') }}
-                  {% if c.consent_valid_until < now.replace(tzinfo=None) %}
-                    <strong>(caducado, reautoriza)</strong>
+                  {% set dias = (c.consent_valid_until - now.replace(tzinfo=None)).days %}
+                  {% if dias < 0 %}
+                    <strong class="negative">caducado: vuelve a conectar el banco</strong>
+                  {% else %}
+                    <span class="muted{{ ' negative' if dias <= 10 }}">· quedan {{ dias }} día{{ "s" if dias != 1 }}</span>
                   {% endif %}
                 {% else %}
                   —
@@ -74,7 +77,7 @@
   <section>
     <h2>Cuentas vinculadas</h2>
     {% if not accounts %}
-      <p>Sin cuentas todavía.</p>
+      <p class="empty">Sin cuentas todavía.</p>
     {% else %}
       <table>
         <thead>
@@ -84,8 +87,8 @@
           {% for a in accounts %}
             <tr>
               <td>{{ a.bank.value }}</td>
-              <td>{{ a.name }}</td>
-              <td>{{ a.iban or '—' }}</td>
+              <td>{{ a.name|title }}</td>
+              <td class="iban">{% if a.iban %}{{ a.iban[:4] }} ···· {{ a.iban[-4:] }}{% else %}—{% endif %}</td>
               <td>{% if ultima_sync.get(a.id) %}{{ ultima_sync[a.id].strftime('%d/%m/%Y %H:%M') }}{% else %}—{% endif %}</td>
             </tr>
           {% endfor %}

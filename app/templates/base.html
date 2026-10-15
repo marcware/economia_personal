@@ -4,28 +4,40 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Economía Personal{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  {% set v = version_estaticos() %}
+  <link rel="stylesheet" href="/static/css/style.css?v={{ v }}">
+  <script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">Economía Personal</a>
-    <nav>
-      <a href="/">Hoy</a>
-      <a href="/dashboard">Dashboard</a>
-      <a href="/patrimonio">Patrimonio</a>
-      <a href="/conexiones">Conexiones</a>
-      <a href="/movimientos">Movimientos</a>
-      <a href="/consejos">Consejos</a>
-      <a href="/presupuestos">Presupuestos</a>
-      <a href="/anual">Año</a>
-      <a href="/categorias">Categorías</a>
-      {% set n_traspasos = pending_transfer_candidates_count() %}
-      <a href="/autotraspasos">Autotraspasos{% if n_traspasos > 0 %} <span class="badge">{{ n_traspasos }}</span>{% endif %}</a>
-      <a href="/notas">Notas</a>
-    </nav>
-  </header>
-  <main class="content">
-    {% block content %}{% endblock %}
-  </main>
+  {% set ruta = request.url.path %}
+  {% macro enlace(href, texto) -%}
+    <a href="{{ href }}"{% if ruta == href or (href != '/' and ruta.startswith(href ~ '/')) %} class="active" aria-current="page"{% endif %}>{{ texto }}{{ caller() if caller else '' }}</a>
+  {%- endmacro %}
+  <div class="layout">
+    <header class="sidebar">
+      <a class="brand" href="/"><span class="brand-mark">€</span><span class="brand-name">Economía Personal</span></a>
+      <nav>
+        <div class="nav-group">Día a día</div>
+        {{ enlace("/", "Hoy") }}
+        {{ enlace("/presupuestos", "Presupuestos") }}
+        {{ enlace("/movimientos", "Movimientos") }}
+        {{ enlace("/consejos", "Consejos") }}
+        <div class="nav-group">Análisis</div>
+        {{ enlace("/dashboard", "Dashboard") }}
+        {{ enlace("/anual", "Año") }}
+        {{ enlace("/patrimonio", "Patrimonio") }}
+        <div class="nav-group">Mantenimiento</div>
+        {% set n_traspasos = pending_transfer_candidates_count() %}
+        {% call enlace("/autotraspasos", "Autotraspasos") %}{% if n_traspasos > 0 %} <span class="badge">{{ n_traspasos }}</span>{% endif %}{% endcall %}
+        {{ enlace("/categorias", "Categorías") }}
+        {{ enlace("/conexiones", "Conexiones") }}
+        {{ enlace("/notas", "Notas") }}
+      </nav>
+    </header>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="/static/js/app.js?v={{ v }}"></script>
 </body>
 </html>

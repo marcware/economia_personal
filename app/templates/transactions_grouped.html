@@ -2,7 +2,7 @@
 {% block title %}Categorizar pendientes{% endblock %}
 {% block content %}
   {% import "_category_picker.html" as cp %}
-  <h1>Categorizar pendientes (agrupado por comercio)</h1>
+  <h1>Categorizar pendientes</h1>
   <p>
     Estos son los movimientos "sin clasificar" agrupados por descripción exacta, del más repetido
     al menos. Asigna una categoría una vez y se aplicará a todos los de ese grupo (y a los futuros).
@@ -10,20 +10,20 @@
   </p>
 
   {% if not grupos %}
-    <p>No queda nada por categorizar. 🎉</p>
+    <p class="empty">No queda nada por categorizar. 🎉</p>
   {% else %}
     <table>
       <thead>
-        <tr><th>Descripción</th><th>Nº</th><th>Importe total</th><th>Categoría</th></tr>
+        <tr><th>Descripción</th><th class="num">Nº</th><th class="num">Importe total</th><th>Categoría</th></tr>
       </thead>
       <tbody>
         {% for g in grupos %}
           <tr>
             <td>{{ g.descripcion }}</td>
-            <td>{{ g.count }}</td>
-            <td>{{ "%.2f"|format(g.total) }} €</td>
+            <td class="num">{{ g.count }}</td>
+            <td class="num">{{ g.total|eur }}</td>
             <td>
-              <form method="post" action="/movimientos/categorizar-grupo" class="inline-form">
+              <form method="post" action="/movimientos/categorizar-grupo" class="inline-form" data-aviso="Grupo categorizado">
                 <input type="hidden" name="description_normalized" value="{{ g.descripcion }}">
                 {{ cp.picker() }}
                 <button type="submit" class="button-sm">Asignar</button>

@@ -4,14 +4,14 @@
   <h1>Notas financieras</h1>
   <p>Conclusiones, hallazgos y decisiones del análisis de tu economía — para que no se pierdan en el chat.</p>
 
-  <form method="post" action="/notas" class="note-form">
+  <form method="post" action="/notas" class="note-form" data-aviso="Nota guardada">
     <input type="text" name="title" placeholder="Título" required>
     <textarea name="content" rows="4" placeholder="Contenido…" required></textarea>
     <button type="submit" class="button-sm">Guardar nota</button>
   </form>
 
   {% if not notas %}
-    <p>Todavía no hay notas.</p>
+    <p class="empty">Todavía no hay notas.</p>
   {% else %}
     <div class="notes-list">
       {% for n in notas %}

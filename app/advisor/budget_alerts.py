@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.advisor.types import Advice
 from app.services.budget_service import budget_rows
+from app.formato import eur
 
 URL_PRESUPUESTOS = "/presupuestos?year={year}&month={month}"
 
@@ -22,8 +23,8 @@ def check(db: Session, year: int, month: int, month_df: pd.DataFrame) -> list[Ad
         if fila["estado"] == "over":
             advices.append(Advice(
                 "presupuesto_categoria", "danger", f"Presupuesto superado: {nombre}",
-                f"Has superado el presupuesto de {nombre} en {gasto - limite:.2f}€ "
-                f"({gasto:.2f}€ de {limite:.2f}€).",
+                f"Has superado el presupuesto de {nombre} en {eur(gasto - limite)} "
+                f"({eur(gasto)} de {eur(limite)}).",
                 url,
             ))
         # Un fijo pagado exacto va al 100 % todos los meses: no es un aviso.
@@ -31,7 +32,7 @@ def check(db: Session, year: int, month: int, month_df: pd.DataFrame) -> list[Ad
             advices.append(Advice(
                 "presupuesto_categoria", "warning", f"Cerca del límite: {nombre}",
                 f"Vas al {fila['ratio']:.0f}% de tu presupuesto de {nombre} "
-                f"({gasto:.2f}€ de {limite:.2f}€).",
+                f"({eur(gasto)} de {eur(limite)}).",
                 url,
             ))
 

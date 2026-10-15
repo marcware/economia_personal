@@ -192,3 +192,23 @@ template values.
 
 Templates in `app/templates/` are server-rendered Jinja2 (one file per router/page), sharing
 `base.html`; static assets (CSS, a vendored `chart.min.js`) live in `app/static/`, mounted at `/static`.
+
+UI conventions: every colour comes from the CSS variables at the top of
+[app/static/css/style.css](app/static/css/style.css), which define a light and a dark theme (follows
+the system setting) — don't hardcode hex colours or inline `style="background:…"` in templates; use
+the classes (`button-secondary`, `positive`/`negative`, `advice-*`, `tag`, `badge`). A top-level
+`<section>` renders as a card. Amounts go through the `eur` Jinja filter (`{{ x|eur }}` → `1.234,56 €`,
+`|eur(0)` without decimals; defined in [app/templating.py](app/templating.py)) and numeric table cells
+take the `num` class (right-aligned, tabular figures). Charts load
+[app/static/js/charts.js](app/static/js/charts.js) after `chart.min.js`: it themes Chart.js from the
+same CSS variables and exposes `tema` (colours, `tema.eur`). Amounts inside Python-built texts (advice,
+pendientes) use `app.formato.eur`/`numero`, the same functions behind the filters.
+[app/static/js/app.js](app/static/js/app.js) is loaded on every page and is progressive enhancement
+only: after any POST form it restores the scroll position and shows a toast (`data-aviso="…"` on the
+form sets its text, `data-enviando="…"` the button text while it runs); `form[data-autoenviar]` submits
+on select change; `.solo-si-cambia` hides the save button until the value changes;
+`<input data-filtra=".selector">` filters blocks client-side. Long pages keep the actionable part
+visible and fold the rest: `<section class="plegable"><details><summary><h2>…</h2><span
+class="resumen">key figure</span></summary>…` — put the figure that answers the section's question in
+the summary so it rarely needs opening. Static files are cache-busted with `?v={{ version_estaticos() }}`. The self-signed cert blocks browser
+automation on :8000; to look at pages from a tool, run a second plain-HTTP `uvicorn app.main:app --port 8001`.

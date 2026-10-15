@@ -4,10 +4,13 @@
   {% import "_category_picker.html" as cp %}
   {% set filtros = "/movimientos?categoria=" ~ categoria ~ "&cuenta=" ~ (cuenta or '') ~ "&texto=" ~ texto|urlencode %}
   {% set base_url = filtros ~ "&mes=" ~ mes %}
-  <h1>Movimientos</h1>
-  <p><a href="/movimientos/agrupados">Categorizar pendientes agrupados por comercio &raquo;</a></p>
+  <div class="page-head">
+    <h1>Movimientos</h1>
+    <a href="/movimientos/agrupados" class="button-sm button-secondary">Categorizar pendientes por comercio</a>
+  </div>
+  
 
-  <form method="get" action="/movimientos" class="filters">
+  <form method="get" action="/movimientos" class="filters" data-autoenviar>
     <select name="categoria">
       <option value="" {{ 'selected' if not categoria }}>Todas las categorías</option>
       <option value="sin_clasificar" {{ 'selected' if categoria == 'sin_clasificar' }}>Sin clasificar</option>
@@ -18,17 +21,18 @@
     <select name="cuenta">
       <option value="">Todas las cuentas</option>
       {% for a in accounts %}
-        <option value="{{ a.id }}" {{ 'selected' if cuenta == a.id }}>{{ a.name }} ({{ a.iban }})</option>
+        <option value="{{ a.id }}" {{ 'selected' if cuenta == a.id }}>{{ a.bank.value }}{% if a.iban %} ···· {{ a.iban[-4:] }}{% endif %}</option>
       {% endfor %}
     </select>
-    <input type="text" name="texto" placeholder="Buscar en descripción…" value="{{ texto }}">
+    <input type="search" name="texto" placeholder="Buscar en descripción…" value="{{ texto }}" class="buscador">
     {% if mes %}<input type="hidden" name="mes" value="{{ mes }}">{% endif %}
-    <button type="submit" class="button-sm">Filtrar</button>
+    <button type="submit" class="button-sm">Buscar</button>
+    {% if categoria or cuenta or texto %}<a href="/movimientos{% if mes %}?mes={{ mes }}{% endif %}" class="button-sm button-secondary">Quitar filtros</a>{% endif %}
   </form>
 
   <p>
     {{ total }} movimiento(s){% if mes %} en {{ mes_nombre }}{% endif %},
-    suma <span class="{{ 'positive' if suma > 0 else 'negative' }}">{{ "%.2f"|format(suma) }} €</span>
+    suma <span class="{{ 'positive' if suma > 0 else 'negative' }}">{{ suma|eur }}</span>
     {% if mes %}
       · <a href="{{ filtros }}">ver todos los meses</a>
       · <a href="/presupuestos?year={{ year }}&month={{ month }}">&laquo; volver al presupuesto</a>
@@ -37,16 +41,16 @@
 
   <table>
     <thead>
-      <tr><th>Fecha</th><th>Descripción</th><th>Importe</th><th>Categoría</th></tr>
+      <tr><th>Fecha</th><th>Descripción</th><th class="num">Importe</th><th>Categoría</th></tr>
     </thead>
     <tbody>
       {% for t in transactions %}
         <tr>
-          <td>{{ t.date.strftime('%d/%m/%Y') }}</td>
+          <td class="fecha">{{ t.date.strftime('%d/%m/%Y') }}</td>
           <td>{{ t.description_raw }}</td>
-          <td class="{{ 'positive' if t.amount > 0 else 'negative' }}">{{ "%.2f"|format(t.amount) }} €</td>
+          <td class="num {{ 'positive' if t.amount > 0 else 'negative' }}">{{ t.amount|eur }}</td>
           <td>
-            <form method="post" action="/movimientos/categorizar" class="inline-form">
+            <form method="post" action="/movimientos/categorizar" class="inline-form" data-aviso="Categoría guardada">
               <input type="hidden" name="transaction_id" value="{{ t.id }}">
               <input type="hidden" name="redirect_to"
                      value="{{ base_url }}&page={{ page }}">

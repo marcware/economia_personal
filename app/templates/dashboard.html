@@ -1,44 +1,45 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-  <h1>Dashboard</h1>
-  <p class="muted">¿Cuánto puedes gastar hoy? Míralo en <a href="/">Hoy</a>.</p>
-
   {% if sin_datos %}
+    <h1>Dashboard</h1>
     <p>Todavía no hay movimientos. Ve a <a href="/conexiones">Conexiones</a> para conectar tu banco y sincronizar.</p>
   {% else %}
+    <div class="page-head">
+    <h1>Dashboard</h1>
     <div class="month-nav">
       {% if prev_month %}
-        <a href="/dashboard?year={{ prev_month[0] }}&month={{ prev_month[1] }}">&laquo; anterior</a>
+        <a href="/dashboard?year={{ prev_month[0] }}&month={{ prev_month[1] }}">&lsaquo; anterior</a>
       {% else %}
         <span></span>
       {% endif %}
       <h2>{{ summary.month_name }} {{ summary.year }}</h2>
       {% if next_month %}
-        <a href="/dashboard?year={{ next_month[0] }}&month={{ next_month[1] }}">siguiente &raquo;</a>
+        <a href="/dashboard?year={{ next_month[0] }}&month={{ next_month[1] }}">siguiente &rsaquo;</a>
       {% else %}
         <span></span>
       {% endif %}
+    </div>
     </div>
 
     <div class="cards">
       <div class="card">
         <div class="card-label">Ingresado</div>
-        <div class="card-value positive">{{ "%.2f"|format(summary.ingresos) }} €</div>
+        <div class="card-value positive">{{ summary.ingresos|eur }}</div>
         {% if summary.otros_abonos %}
-          <div class="card-sub">aparte, {{ "%.2f"|format(summary.otros_abonos) }} € de devoluciones y otros abonos</div>
+          <div class="card-sub">aparte, {{ summary.otros_abonos|eur }} de devoluciones y otros abonos</div>
         {% endif %}
       </div>
       <div class="card">
         <div class="card-label">Gastado</div>
-        <div class="card-value negative">{{ "%.2f"|format(summary.gastos) }} €</div>
+        <div class="card-value negative">{{ summary.gastos|eur }}</div>
       </div>
       <div class="card">
         <div class="card-label">Ahorrado</div>
         <div class="card-value {{ 'positive' if summary.ahorro >= 0 else 'negative' }}">
-          {{ "%.2f"|format(summary.ahorro) }} €
+          {{ summary.ahorro|eur }}
           {% if ingresos_previstos %}
-            <span class="card-sub">(mes en curso: faltan ingresos por entrar; previstos {{ "%.2f"|format(ingresos_previstos) }} €)</span>
+            <span class="card-sub">(mes en curso: faltan ingresos por entrar; previstos {{ ingresos_previstos|eur }})</span>
           {% elif summary.tasa_ahorro is not none %}
             <span class="card-sub">({{ summary.tasa_ahorro }}% de los ingresos)</span>
           {% endif %}
@@ -49,16 +50,17 @@
     <div class="charts">
       <div class="chart-box">
         <h3>Gasto por categoría</h3>
-        <canvas id="chartCategorias"></canvas>
+        <div class="chart-area"><canvas id="chartCategorias"></canvas></div>
       </div>
       <div class="chart-box">
         <h3>Evolución (12 meses)</h3>
-        <canvas id="chartEvolucion"></canvas>
+        <div class="chart-area"><canvas id="chartEvolucion"></canvas></div>
       </div>
     </div>
 
     {% if advices %}
-      <h3>Consejos destacados</h3>
+      <section>
+      <h2>Consejos destacados</h2>
       <ul class="advice-list">
         {% for a in advices %}
           <li class="advice advice-{{ a.severity }}">
@@ -69,36 +71,37 @@
         {% endfor %}
       </ul>
       <p><a href="/consejos?year={{ summary.year }}&month={{ summary.month }}">Ver todos los consejos &raquo;</a></p>
+      </section>
     {% endif %}
 
     {% if hormiga.num or hormiga.media_mensual %}
       <section>
-        <h3>🐜 Gastos hormiga</h3>
+        <h2>🐜 Gastos hormiga</h2>
         <p class="muted">Caprichos de hasta {{ hormiga.importe_max|int }} € (ocio, compras, sin clasificar):
            uno a uno no se notan, sumados sí.</p>
         <div class="cards">
           <div class="card">
             <div class="card-label">Este mes</div>
-            <div class="card-value">{{ "%.2f"|format(hormiga.total) }} €</div>
-            <div class="card-sub">{{ hormiga.num }} compras · media {{ "%.0f"|format(hormiga.media_mensual) }} €/mes
+            <div class="card-value">{{ hormiga.total|eur }}</div>
+            <div class="card-sub">{{ hormiga.num }} compras · media {{ hormiga.media_mensual|eur(0) }}/mes
               ({{ "%.0f"|format(hormiga.num_medio) }} compras)</div>
           </div>
           <div class="card">
             <div class="card-label">Al año, a tu ritmo medio</div>
-            <div class="card-value negative">{{ "%.0f"|format(hormiga.anual) }} €</div>
+            <div class="card-value negative">{{ hormiga.anual|eur(0) }}</div>
           </div>
           <div class="card">
             <div class="card-label">Invertido {{ hormiga.años }} años serían</div>
-            <div class="card-value positive">{{ "%.0f"|format(hormiga.invertido) }} €</div>
+            <div class="card-value positive">{{ hormiga.invertido|eur(0) }}</div>
             <div class="card-sub">al {{ "%.0f"|format(hormiga.rentabilidad_real) }} % anual por encima de la inflación</div>
           </div>
         </div>
         {% if hormiga.comercios %}
           <table>
-            <thead><tr><th>Dónde se van (últimos 3 meses)</th><th>Veces</th><th>Total</th></tr></thead>
+            <thead><tr><th>Dónde se van (últimos 3 meses)</th><th class="num">Veces</th><th class="num">Total</th></tr></thead>
             <tbody>
               {% for c in hormiga.comercios %}
-                <tr><td>{{ c.nombre }}</td><td>{{ c.num }}</td><td>{{ "%.2f"|format(c.total) }} €</td></tr>
+                <tr><td>{{ c.nombre }}</td><td class="num">{{ c.num }}</td><td class="num">{{ c.total|eur }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -106,24 +109,32 @@
       </section>
     {% endif %}
 
-    <h3>Top categorías de gasto</h3>
-    <table>
-      <thead><tr><th>Categoría</th><th>Importe</th></tr></thead>
-      <tbody>
-        {% for c in top_categorias %}
-          <tr><td>{{ c.categoria }}</td><td>{{ "%.2f"|format(c.importe) }} €</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <section>
+      <h2>Top categorías de gasto</h2>
+      <table class="ledger">
+        <thead><tr><th>Categoría</th><th>Importe</th></tr></thead>
+        <tbody>
+          {% for c in top_categorias %}
+            <tr><td>{{ c.categoria }}</td><td>{{ c.importe|eur }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
 
     <script src="/static/js/chart.min.js"></script>
+    <script src="/static/js/charts.js"></script>
     <script>
       const categorias = {{ top_categorias | tojson }};
       new Chart(document.getElementById('chartCategorias'), {
-        type: 'doughnut',
+        type: 'bar',
         data: {
-          labels: categorias.map(c => c.categoria),
-          datasets: [{ data: categorias.map(c => c.importe) }],
+          labels: categorias.map(c => c.categoria.split(' · ').pop()),
+          datasets: [{ data: categorias.map(c => c.importe), backgroundColor: tema.gastos, barThickness: 14 }],
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { callback: v => tema.eur(v) } }, y: { grid: { display: false } } },
         },
       });
 
@@ -133,9 +144,12 @@
         data: {
           labels: trend.map(t => t.label),
           datasets: [
-            { label: 'Ingresos', data: trend.map(t => t.ingresos), backgroundColor: '#0a6e4e' },
-            { label: 'Gastos', data: trend.map(t => t.gastos), backgroundColor: '#b3261e' },
+            { label: 'Ingresos', data: trend.map(t => t.ingresos), backgroundColor: tema.ingresos },
+            { label: 'Gastos', data: trend.map(t => t.gastos), backgroundColor: tema.gastos },
           ],
+        },
+        options: {
+          scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => tema.eur(v) } } },
         },
       });
     </script>

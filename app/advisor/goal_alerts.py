@@ -8,13 +8,14 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.advisor.types import Advice
+from app.formato import eur, numero
 from app.services.goal_service import goal_rows
 
 URL_PRESUPUESTOS = "/presupuestos?year={year}&month={month}"
 
 
 def _formatea(valor: float, unidad: str) -> str:
-    return f"{valor:,.2f} {unidad}" if unidad == "€" else f"{valor:.1f} {unidad}"
+    return eur(valor) if unidad == "€" else f"{numero(valor, 1)} {unidad}"
 
 
 def check(db: Session, year: int, month: int, month_df: pd.DataFrame) -> list[Advice]:

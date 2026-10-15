@@ -2,6 +2,7 @@ import pandas as pd
 
 from app.advisor.types import Advice
 from app.models import UserSettings
+from app.formato import eur
 
 MIN_HISTORY_MONTHS = 3
 MIN_ABSOLUTE_DIFF = 10.0  # evita avisos por ruido en importes pequeños
@@ -45,8 +46,8 @@ def check_anomalies(
         if gasto_actual > umbral and (gasto_actual - media) > MIN_ABSOLUTE_DIFF:
             advices.append(Advice(
                 "gasto_anomalo", "warning", f"Gasto inusual en {category_label}",
-                f"Este mes llevas {gasto_actual:.2f}€ en {category_label}, frente a tu media "
-                f"histórica de {media:.2f}€.",
+                f"Este mes llevas {eur(gasto_actual)} en {category_label}, frente a tu media "
+                f"histórica de {eur(media)}.",
             ))
     return advices
 
@@ -66,8 +67,8 @@ def check_trends(df: pd.DataFrame, year: int, month: int) -> list[Advice]:
             advices.append(Advice(
                 "tendencia_gasto", "info", f"Tendencia al alza en {category_label}",
                 f"Tu gasto en {category_label} lleva 3 meses subiendo "
-                f"({a:.0f}€ → {b:.0f}€ → {c:.0f}€); si vuelves a tu nivel inicial "
-                f"ahorrarías ~{c - a:.0f}€/mes.",
+                f"({eur(a, 0)} → {eur(b, 0)} → {eur(c, 0)}); si vuelves a tu nivel inicial "
+                f"ahorrarías ~{eur(c - a, 0)}/mes.",
             ))
     return advices
 
@@ -85,6 +86,6 @@ def check_subscriptions(df: pd.DataFrame, year: int, month: int) -> list[Advice]
         return []
     return [Advice(
         "suscripciones", "info", "Suscripciones activas",
-        f"Tienes {count} cargo(s) de suscripciones este mes por un total de {total:.2f}€. "
+        f"Tienes {count} cargo(s) de suscripciones este mes por un total de {eur(total)}. "
         "Revisa si las usas todas.",
     )]

@@ -1,21 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Consejos{% endblock %}
+
+{% macro grupo(titulo, severidad) %}
+  {% set lista = advices|selectattr("severity", "equalto", severidad)|list %}
+  {% if lista %}
+    <section>
+      <h2>{{ titulo }} <span class="badge {{ {"danger": "", "warning": "riesgo", "info": "pendiente"}[severidad] }}">{{ lista|length }}</span></h2>
+      <ul class="advice-list">
+        {% for a in lista %}
+          <li class="advice advice-{{ a.severity }}">
+            <div>
+              <strong>{{ a.title }}</strong>
+              <p>{{ a.message }}</p>
+            </div>
+            {% if a.url %}<a href="{{ a.url }}" class="button-sm button-secondary">Ver detalle</a>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+{% endmacro %}
+
 {% block content %}
-  <h1>Consejos — {{ month_name }} {{ year }}</h1>
+  <h1>Consejos de {{ month_name|lower if month_name else "" }} {{ year or "" }}</h1>
 
   {% if sin_datos %}
-    <p>Todavía no hay movimientos. Ve a <a href="/conexiones">Conexiones</a> para conectar tu banco.</p>
+    <p class="empty">Todavía no hay movimientos. Ve a <a href="/conexiones">Conexiones</a> para conectar tu banco.</p>
   {% elif not advices %}
-    <p>Sin avisos este mes — todo dentro de lo esperado.</p>
+    <p class="empty">Sin avisos este mes: todo dentro de lo esperado.</p>
   {% else %}
-    <ul class="advice-list">
-      {% for a in advices %}
-        <li class="advice advice-{{ a.severity }}">
-          <strong>{{ a.title }}</strong>
-          <p>{{ a.message }}</p>
-          {% if a.url %}<p><a href="{{ a.url }}">Ver detalle &raquo;</a></p>{% endif %}
-        </li>
-      {% endfor %}
-    </ul>
+    {{ grupo("Requiere atención", "danger") }}
+    {{ grupo("A vigilar", "warning") }}
+    {{ grupo("Para mejorar", "info") }}
   {% endif %}
 {% endblock %}

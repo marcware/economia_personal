@@ -62,7 +62,7 @@
   </div>
 
   <div class="chart-box">
-    <canvas id="chartAnual" height="90"></canvas>
+    <div class="chart-area"><canvas id="chartAnual"></canvas></div>
   </div>
 
   <div class="tabla-anual">
@@ -165,6 +165,7 @@
   </section>
 
   <script src="/static/js/chart.min.js"></script>
+  <script src="/static/js/charts.js"></script>
   <script>
     const meses = {{ r.meses | tojson }};
     const gastos = {{ r.total_gastos | tojson }};
@@ -175,11 +176,14 @@
         labels: meses.map(m => m.nombre),
         datasets: [
           { type: 'bar', label: 'Gastos', data: gastos,
-            backgroundColor: meses.map(m => m.estado === 'cerrado' ? '#b3261e' : 'rgba(179,38,30,0.35)') },
-          { type: 'line', label: 'Ingresos', data: ingresos, borderColor: '#0a6e4e', backgroundColor: '#0a6e4e' },
-          { type: 'line', label: 'Media de gasto', data: meses.map(() => media), borderColor: '#888',
+            backgroundColor: meses.map(m => m.estado === 'cerrado' ? tema.gastos : tema.suave(tema.gastos)) },
+          { type: 'line', label: 'Ingresos', data: ingresos, borderColor: tema.ingresos, backgroundColor: tema.ingresos },
+          { type: 'line', label: 'Media de gasto', data: meses.map(() => media), borderColor: tema.neutro,
             borderDash: [6, 4], pointRadius: 0 },
         ],
+      },
+      options: {
+        scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => tema.eur(v) } } },
       },
     });
   </script>

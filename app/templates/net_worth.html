@@ -1,96 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Patrimonio{% endblock %}
-{% block titulo_duplicado_a_borrar %}
-  {% set l = libertad %}
-  <section>
-    <h2>🧭 Camino a la libertad financiera</h2>
-    <p class="muted">Medias de los últimos {{ l.meses_media }} meses cerrados. El orden importa:
-       primero el colchón, después fuera la deuda cara, después invertir cada vez más.</p>
-
-    <div class="cards">
-      <div class="card">
-        <div class="card-label">1 · Colchón de emergencia</div>
-        <div class="card-value {{ 'positive' if l.meses_colchon and l.meses_colchon >= l.meses_colchon_objetivo else 'negative' }}">
-          {% if l.meses_colchon is not none %}{{ "%.1f"|format(l.meses_colchon) }} meses{% else %}—{% endif %}
-        </div>
-        <div class="card-sub">{{ "%.0f"|format(l.colchon) }} € líquidos de {{ "%.0f"|format(l.objetivo_colchon) }} €
-          ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
-          {{ "%.0f"|format(l.necesidades_medias) }} €/mes)</div>
-      </div>
-      <div class="card">
-        <div class="card-label">2 · Deuda de consumo</div>
-        <div class="card-value {{ 'positive' if l.total_deuda_consumo == 0 else 'negative' }}">{{ "%.0f"|format(l.total_deuda_consumo) }} €</div>
-        <div class="card-sub">préstamos (sin hipoteca). Amortizar uno al 7-10 % TAE rinde más,
-          y seguro, que invertir esperando un 4-7 %.</div>
-      </div>
-      <div class="card">
-        <div class="card-label">3 · Tasa de ahorro</div>
-        <div class="card-value {{ 'positive' if l.tasa_ahorro is not none and l.tasa_ahorro >= l.tasa_ahorro_objetivo else 'negative' }}">
-          {% if l.tasa_ahorro is not none %}{{ "%.0f"|format(l.tasa_ahorro) }} %{% else %}—{% endif %}
-        </div>
-        <div class="card-sub">objetivo ≥ {{ "%.0f"|format(l.tasa_ahorro_objetivo) }} % · ingresas {{ "%.0f"|format(l.ingresos_medios) }} €/mes,
-          consumes {{ "%.0f"|format(l.consumo_medio) }} €, inviertes {{ "%.0f"|format(l.inversion_media) }} €</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Independencia financiera</div>
-        <div class="card-value">{% if l.progreso_fi is not none %}{{ "%.1f"|format(l.progreso_fi) }} %{% else %}—{% endif %}</div>
-        <div class="card-sub">{{ "%.0f"|format(l.invertido) }} € invertidos de {{ "%.0f"|format(l.numero_fi) }} €
-          (gasto anual × 25, regla del 4 %)</div>
-      </div>
-    </div>
-
-    <table>
-      <thead><tr><th>Escenario</th><th>Inviertes al mes</th><th>En 10 años tendrías</th><th>Libertad financiera en</th></tr></thead>
-      <tbody>
-        {% for e in l.escenarios %}
-          <tr>
-            <td>{{ e.etiqueta }}</td>
-            <td>{{ "%.0f"|format(e.mensual) }} €</td>
-            <td>{{ "%.0f"|format(e.en_10_años) }} €</td>
-            <td>{% if e.años is not none %}{{ "%.0f"|format(e.años) }} años{% else %}más de 60 años{% endif %}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <p class="muted">Suponiendo un {{ "%.0f"|format(l.rentabilidad_real) }} % anual por encima de la inflación
-       (orientativo para una cartera indexada global a largo plazo; no es una garantía).
-       Bajar el gasto acerca la meta por los dos lados: sube lo que inviertes y baja la cifra objetivo.</p>
-  </section>
-{% endblock %}
 {% block content %}
   <h1>Patrimonio neto</h1>
 
   <div class="cards">
-    <div class="card">
+    <div class="card card-hero">
       <div class="card-label">Patrimonio neto</div>
       <div class="card-value {{ 'positive' if summary.net_worth >= 0 else 'negative' }}">
-        {{ "%.2f"|format(summary.net_worth) }} €
+        {{ summary.net_worth|eur }}
       </div>
+      <div class="card-sub">cuentas + inversiones − deudas</div>
     </div>
     <div class="card">
       <div class="card-label">Cuentas bancarias</div>
-      <div class="card-value positive">{{ "%.2f"|format(summary.total_accounts) }} €</div>
+      <div class="card-value positive">{{ summary.total_accounts|eur }}</div>
     </div>
     <div class="card">
       <div class="card-label">Inversiones declaradas</div>
-      <div class="card-value positive">{{ "%.2f"|format(summary.total_assets) }} €</div>
+      <div class="card-value positive">{{ summary.total_assets|eur }}</div>
     </div>
     <div class="card">
       <div class="card-label">Deudas pendientes</div>
-      <div class="card-value negative">{{ "%.2f"|format(summary.total_liabilities) }} €</div>
+      <div class="card-value negative">{{ summary.total_liabilities|eur }}</div>
     </div>
   </div>
 
   <section>
-    <h2>Cuentas bancarias (saldo real, vía API)</h2>
+    <h2>Cuentas bancarias</h2>
+    <p class="muted">Saldo real traído del banco al <a href="/conexiones">sincronizar</a>.</p>
     <table>
-      <thead><tr><th>Cuenta</th><th>Saldo</th><th>Actualizado</th></tr></thead>
+      <thead><tr><th>Cuenta</th><th class="num">Saldo</th><th class="num">Actualizado</th></tr></thead>
       <tbody>
         {% for a in summary.accounts %}
           <tr>
-            <td>{{ a.account.bank.value }} · {{ a.account.name }}</td>
-            <td>{{ "%.2f"|format(a.balance) }} €</td>
-            <td>{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
+            <td>{{ a.account.bank.value }}{% if a.account.iban %} ···· {{ a.account.iban[-4:] }}{% endif %}
+              <span class="nota">{{ a.account.name|title }}</span></td>
+            <td class="num">{{ a.balance|eur }}</td>
+            <td class="num muted">{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -99,42 +45,67 @@
 
   <section>
     <h2>Inversiones declaradas</h2>
+    <p class="muted">Lo que no llega por el banco. Cambia el valor en la propia fila para actualizarlo; el histórico se conserva.</p>
     <table>
-      <thead><tr><th>Nombre</th><th>Valor</th><th>Actualizado</th></tr></thead>
+      <thead><tr><th>Nombre</th><th class="num">Valor</th><th class="num">Actualizado</th></tr></thead>
       <tbody>
         {% for a in summary.assets %}
           <tr>
             <td>{{ a.name }}{% if a.liquido %} <span class="tag">líquido</span>{% endif %}</td>
-            <td>{{ "%.2f"|format(a.value) }} €</td>
-            <td>{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
+            <td class="num">
+              <form method="post" action="/patrimonio/activo" class="inline-form solo-si-cambia editar-valor" data-aviso="Valor actualizado">
+                <input type="hidden" name="name" value="{{ a.name }}">
+                {% if a.liquido %}<input type="hidden" name="liquido" value="true">{% endif %}
+                <button type="submit" class="button-sm">Guardar</button>
+                <input type="number" step="0.01" name="value" value="{{ "%.2f"|format(a.value) }}" aria-label="Valor de {{ a.name }}"> €
+              </form>
+            </td>
+            <td class="num muted">{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
-    <form method="post" action="/patrimonio/activo" class="inline-form">
+    <details class="añadir">
+    <summary>Añadir una inversión</summary>
+    <form method="post" action="/patrimonio/activo" class="inline-form" data-aviso="Inversión añadida">
       <input type="text" name="name" placeholder="Nombre (p.ej. PIAS, Fondos, BIT2ME)" required>
       <input type="number" step="0.01" name="value" placeholder="Valor actual (€)" required>
       <label class="checkbox-label"><input type="checkbox" name="liquido" value="true">
         Líquido (colchón: se puede sacar en días sin perder dinero)</label>
-      <button type="submit" class="button-sm">Guardar</button>
+      <button type="submit" class="button-sm">Añadir</button>
     </form>
+    </details>
   </section>
 
   <section>
     <h2>Deudas pendientes</h2>
+    <p class="muted">Actualiza el capital pendiente en la propia fila cuando lo consultes en el banco.</p>
     <table>
-      <thead><tr><th>Nombre</th><th>Capital pendiente</th><th>Actualizado</th></tr></thead>
+      <thead><tr><th>Nombre</th><th class="num">Capital pendiente</th><th class="num">Actualizado</th></tr></thead>
       <tbody>
         {% for l in summary.liabilities %}
-          <tr><td>{{ l.name }}</td><td>{{ "%.2f"|format(l.value) }} €</td><td>{{ l.recorded_at.strftime('%d/%m/%Y') }}</td></tr>
+          <tr>
+            <td>{{ l.name }}</td>
+            <td class="num">
+              <form method="post" action="/patrimonio/pasivo" class="inline-form solo-si-cambia editar-valor" data-aviso="Deuda actualizada">
+                <input type="hidden" name="name" value="{{ l.name }}">
+                <button type="submit" class="button-sm">Guardar</button>
+                <input type="number" step="0.01" name="outstanding_balance" value="{{ "%.2f"|format(l.value) }}" aria-label="Capital pendiente de {{ l.name }}"> €
+              </form>
+            </td>
+            <td class="num muted">{{ l.recorded_at.strftime('%d/%m/%Y') }}</td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
-    <form method="post" action="/patrimonio/pasivo" class="inline-form">
+    <details class="añadir">
+    <summary>Añadir una deuda</summary>
+    <form method="post" action="/patrimonio/pasivo" class="inline-form" data-aviso="Deuda añadida">
       <input type="text" name="name" placeholder="Nombre (p.ej. Hipoteca, Préstamo)" required>
       <input type="number" step="0.01" name="outstanding_balance" placeholder="Capital pendiente (€)" required>
-      <button type="submit" class="button-sm">Guardar</button>
+      <button type="submit" class="button-sm">Añadir</button>
     </form>
+    </details>
   </section>
 
   {% set l = libertad %}
@@ -147,15 +118,15 @@
       <div class="card">
         <div class="card-label">1 · Colchón de emergencia</div>
         <div class="card-value {{ 'positive' if l.meses_colchon and l.meses_colchon >= l.meses_colchon_objetivo else 'negative' }}">
-          {% if l.meses_colchon is not none %}{{ "%.1f"|format(l.meses_colchon) }} meses{% else %}—{% endif %}
+          {% if l.meses_colchon is not none %}{{ l.meses_colchon|numero(1) }} meses{% else %}—{% endif %}
         </div>
-        <div class="card-sub">{{ "%.0f"|format(l.colchon) }} € líquidos de {{ "%.0f"|format(l.objetivo_colchon) }} €
+        <div class="card-sub">{{ l.colchon|eur(0) }} líquidos de {{ l.objetivo_colchon|eur(0) }}
           ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
-          {{ "%.0f"|format(l.necesidades_medias) }} €/mes)</div>
+          {{ l.necesidades_medias|eur(0) }}/mes)</div>
       </div>
       <div class="card">
         <div class="card-label">2 · Deuda de consumo</div>
-        <div class="card-value {{ 'positive' if l.total_deuda_consumo == 0 else 'negative' }}">{{ "%.0f"|format(l.total_deuda_consumo) }} €</div>
+        <div class="card-value {{ 'positive' if l.total_deuda_consumo == 0 else 'negative' }}">{{ l.total_deuda_consumo|eur(0) }}</div>
         <div class="card-sub">préstamos (sin hipoteca). Amortizar uno al 7-10 % TAE rinde más,
           y seguro, que invertir esperando un 4-7 %.</div>
       </div>
@@ -164,26 +135,26 @@
         <div class="card-value {{ 'positive' if l.tasa_ahorro is not none and l.tasa_ahorro >= l.tasa_ahorro_objetivo else 'negative' }}">
           {% if l.tasa_ahorro is not none %}{{ "%.0f"|format(l.tasa_ahorro) }} %{% else %}—{% endif %}
         </div>
-        <div class="card-sub">objetivo ≥ {{ "%.0f"|format(l.tasa_ahorro_objetivo) }} % · ingresas {{ "%.0f"|format(l.ingresos_medios) }} €/mes,
-          consumes {{ "%.0f"|format(l.consumo_medio) }} €, inviertes {{ "%.0f"|format(l.inversion_media) }} €</div>
+        <div class="card-sub">objetivo ≥ {{ "%.0f"|format(l.tasa_ahorro_objetivo) }} % · ingresas {{ l.ingresos_medios|eur(0) }}/mes,
+          consumes {{ l.consumo_medio|eur(0) }}, inviertes {{ l.inversion_media|eur(0) }}</div>
       </div>
       <div class="card">
         <div class="card-label">Independencia financiera</div>
-        <div class="card-value">{% if l.progreso_fi is not none %}{{ "%.1f"|format(l.progreso_fi) }} %{% else %}—{% endif %}</div>
-        <div class="card-sub">{{ "%.0f"|format(l.invertido) }} € invertidos de {{ "%.0f"|format(l.numero_fi) }} €
+        <div class="card-value">{% if l.progreso_fi is not none %}{{ l.progreso_fi|numero(1) }} %{% else %}—{% endif %}</div>
+        <div class="card-sub">{{ l.invertido|eur(0) }} invertidos de {{ l.numero_fi|eur(0) }}
           (gasto anual × 25, regla del 4 %)</div>
       </div>
     </div>
 
     <table>
-      <thead><tr><th>Escenario</th><th>Inviertes al mes</th><th>En 10 años tendrías</th><th>Libertad financiera en</th></tr></thead>
+      <thead><tr><th>Escenario</th><th class="num">Inviertes al mes</th><th class="num">En 10 años tendrías</th><th class="num">Libertad financiera en</th></tr></thead>
       <tbody>
         {% for e in l.escenarios %}
           <tr>
             <td>{{ e.etiqueta }}</td>
-            <td>{{ "%.0f"|format(e.mensual) }} €</td>
-            <td>{{ "%.0f"|format(e.en_10_años) }} €</td>
-            <td>{% if e.años is not none %}{{ "%.0f"|format(e.años) }} años{% else %}más de 60 años{% endif %}</td>
+            <td class="num">{{ e.mensual|eur(0) }}</td>
+            <td class="num">{{ e.en_10_años|eur(0) }}</td>
+            <td class="num">{% if e.años is not none %}{{ "%.0f"|format(e.años) }} años{% else %}más de 60 años{% endif %}</td>
           </tr>
         {% endfor %}
       </tbody>

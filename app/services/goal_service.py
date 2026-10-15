@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models import BudgetGroup, Category, FinancialGoal, GoalType
 from app.services import budget_service
 from app.services.dashboard_service import MONTHS_ES, monthly_summary
+from app.formato import numero
 
 # "max" = cumplir es quedarse por debajo; "min" = cumplir es llegar o pasar.
 GOAL_DIRECTION: dict[GoalType, str] = {
@@ -175,7 +176,7 @@ def goal_rows(
         filas.append({
             "goal": goal,
             "titulo": goal.title or _titulo_por_defecto(goal),
-            "etiqueta_objetivo": f"{comparador} {objetivo:,.2f} {unidad}",
+            "etiqueta_objetivo": f"{comparador} {numero(objetivo, 2 if objetivo % 1 else 0)} {unidad}",
             "actual": actual,
             "objetivo": objetivo,
             "unidad": unidad,

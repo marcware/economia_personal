@@ -3,55 +3,13 @@
 {% block content %}
   <h1>Categorías y reglas</h1>
 
-  {% for parent in parents %}
-    <section>
-      <h2>{{ parent.name }}</h2>
-      {% for sub in parent.children|sort(attribute='name') %}
-        <div class="category-block">
-          <h3>
-            {{ sub.name }}
-            <span class="tag">{{ sub.budget_group.value if sub.budget_group else 'sin grupo' }}</span>
-            {% if sub.is_transfer_category %}<span class="tag">traspaso</span>{% endif %}
-          </h3>
-          {% set rules = rules_by_category.get(sub.id, []) %}
-          {% if rules %}
-            <table>
-              <thead><tr><th>Patrón</th><th>Regex</th><th>Signo</th><th>Prioridad</th><th>Usos</th><th>Origen</th><th></th></tr></thead>
-              <tbody>
-                {% for r in rules %}
-                  <tr class="{{ '' if r.active else 'inactive-row' }}">
-                    <td>{{ r.pattern }}</td>
-                    <td>{{ 'sí' if r.is_regex else 'no' }}</td>
-                    <td>{{ r.amount_sign.value }}</td>
-                    <td>{{ r.priority }}</td>
-                    <td>{{ r.match_count }}</td>
-                    <td>{{ 'aprendida' if r.created_from_correction else 'semilla' }}</td>
-                    <td>
-                      {% if r.active %}
-                        <form method="post" action="/categorias/regla/{{ r.id }}/desactivar">
-                          <button type="submit" class="button-sm" style="background:#888">Desactivar</button>
-                        </form>
-                      {% else %}
-                        <form method="post" action="/categorias/regla/{{ r.id }}/activar">
-                          <button type="submit" class="button-sm">Activar</button>
-                        </form>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% else %}
-            <p class="muted">Sin reglas todavía.</p>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </section>
-  {% endfor %}
-
-  <section>
+  <section class="plegable">
+    <details>
+    <summary><h2>Añadir subcategoría o regla</h2><span class="resumen">las reglas también se aprenden solas al categorizar un movimiento</span></summary>
+    <div class="form-grid">
+  <section class="sub">
     <h2>Añadir subcategoría</h2>
-    <form method="post" action="/categorias/subcategoria" class="inline-form">
+    <form method="post" action="/categorias/subcategoria" class="inline-form" data-aviso="Creado">
       <select name="parent_id" required>
         {% for p in parents %}
           <option value="{{ p.id }}">{{ p.name }}</option>
@@ -68,9 +26,9 @@
     </form>
   </section>
 
-  <section>
+  <section class="sub">
     <h2>Añadir regla de categorización</h2>
-    <form method="post" action="/categorias/regla" class="inline-form">
+    <form method="post" action="/categorias/regla" class="inline-form" data-aviso="Creado">
       <input type="text" name="pattern" placeholder="Patrón (texto o regex)" required>
       <select name="category_id" required>
         {% for c in all_subcategories %}
@@ -86,4 +44,58 @@
       <button type="submit" class="button-sm">Crear</button>
     </form>
   </section>
+    </div>
+    </details>
+  </section>
+
+  <div class="filters">
+    <input type="search" data-filtra=".category-block" placeholder="Buscar categoría o patrón (p. ej. «mercadona», «ocio»)…"
+           aria-label="Buscar categoría o patrón" class="buscador" autofocus>
+  </div>
+  <p id="sin-resultados" class="empty" hidden>Ninguna categoría ni regla coincide con la búsqueda.</p>
+
+  {% for parent in parents %}
+    <h2 class="grupo">{{ parent.name }}</h2>
+    {% for sub in parent.children|sort(attribute='name') %}
+      {% set rules = rules_by_category.get(sub.id, []) %}
+      <details class="category-block">
+        <summary>
+          <span class="nombre">{{ sub.name }}</span>
+          <span class="tag">{{ sub.budget_group.value|capitalize if sub.budget_group else 'sin grupo' }}</span>
+          {% if sub.is_transfer_category %}<span class="tag">traspaso</span>{% endif %}
+          <span class="resumen">{{ rules|length }} regla{{ "s" if rules|length != 1 }}</span>
+        </summary>
+        {% if rules %}
+          <table>
+            <thead><tr><th>Patrón</th><th>Tipo</th><th>Signo</th><th class="num">Prioridad</th><th class="num">Usos</th><th>Origen</th><th></th></tr></thead>
+            <tbody>
+              {% for r in rules %}
+                <tr class="{{ '' if r.active else 'inactive-row' }}">
+                  <td>{{ r.pattern }}</td>
+                  <td>{{ 'regex' if r.is_regex else 'texto' }}</td>
+                  <td>{{ {"ANY": "cualquiera", "POSITIVE": "ingreso", "NEGATIVE": "gasto"}.get(r.amount_sign.value, r.amount_sign.value) }}</td>
+                  <td class="num">{{ r.priority }}</td>
+                  <td class="num">{{ r.match_count }}</td>
+                  <td>{{ 'aprendida' if r.created_from_correction else 'semilla' }}</td>
+                  <td class="num">
+                    {% if r.active %}
+                      <form method="post" action="/categorias/regla/{{ r.id }}/desactivar" data-aviso="Regla desactivada">
+                        <button type="submit" class="button-sm button-secondary">Desactivar</button>
+                      </form>
+                    {% else %}
+                      <form method="post" action="/categorias/regla/{{ r.id }}/activar" data-aviso="Regla activada">
+                        <button type="submit" class="button-sm">Activar</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">Sin reglas todavía: se crean al categorizar un movimiento de esta categoría.</p>
+        {% endif %}
+      </details>
+    {% endfor %}
+  {% endfor %}
 {% endblock %}

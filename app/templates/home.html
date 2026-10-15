@@ -3,14 +3,14 @@
 
 {% macro tabla_pendientes(filas) %}
   <table>
-    <thead><tr><th>Categoría</th><th>Previsto</th><th>Ya pagado</th><th>Falta</th></tr></thead>
+    <thead><tr><th>Categoría</th><th class="num">Previsto</th><th class="num">Ya pagado</th><th class="num">Falta</th></tr></thead>
     <tbody>
       {% for f in filas %}
         <tr{% if f.pendiente <= 0 %} class="inactive-row"{% endif %}>
           <td>{{ f.etiqueta }}{% if f.origen == "media" %} <span class="tag">media</span>{% elif f.origen == "habitual" %} <span class="tag" title="Tu gasto habitual supera el presupuesto: se reserva el habitual">gasto habitual</span>{% endif %}</td>
-          <td>{{ "%.2f"|format(f.previsto) }} €</td>
-          <td>{{ "%.2f"|format(f.gastado) }} €</td>
-          <td>{{ "%.2f"|format(f.pendiente) }} €</td>
+          <td class="num">{{ f.previsto|eur }}</td>
+          <td class="num">{{ f.gastado|eur }}</td>
+          <td class="num">{{ f.pendiente|eur }}</td>
         </tr>
       {% endfor %}
     </tbody>
@@ -23,15 +23,15 @@
   <div class="cards">
     <div class="card card-hero">
       <div class="card-label">Libre para gastar hasta la nómina</div>
-      <div class="card-value {{ 'positive' if d.libre >= 0 else 'negative' }}">{{ "%.2f"|format(d.libre) }} €</div>
+      <div class="card-value {{ 'positive' if d.libre >= 0 else 'negative' }}">{{ d.libre|eur }}</div>
       <div class="card-sub">
-        {% if d.libre > 0 %}unos {{ "%.2f"|format(d.libre_por_dia) }} € al día · {% endif %}
+        {% if d.libre > 0 %}unos {{ d.libre_por_dia|eur }} al día · {% endif %}
         {{ d.dias }} día{{ "s" if d.dias != 1 }} hasta el {{ d.ciclo.siguiente.strftime('%d/%m') }}
       </div>
     </div>
     <div class="card">
       <div class="card-label">En cuenta</div>
-      <div class="card-value">{{ "%.2f"|format(d.saldo) }} €</div>
+      <div class="card-value">{{ d.saldo|eur }}</div>
       <div class="card-sub">
         {% if d.fecha_saldo %}saldo del {{ d.fecha_saldo.strftime('%d/%m') }}{% else %}sin saldo sincronizado{% endif %}
         {% if d.saldo_viejo %} · <a href="/conexiones">sincroniza</a> para afinarlo (botón «Sincronizar ahora»){% endif %}
@@ -39,7 +39,7 @@
     </div>
     <div class="card">
       <div class="card-label">Ya tiene dueño</div>
-      <div class="card-value negative">{{ "%.2f"|format(d.comprometido) }} €</div>
+      <div class="card-value negative">{{ d.comprometido|eur }}</div>
       <div class="card-sub">recibos, necesidades, inversión y huchas que faltan</div>
     </div>
   </div>
@@ -48,7 +48,7 @@
     <section>
       <h2>Pendiente</h2>
       {% for p in pendientes %}
-        <p class="advice advice-{{ p.severidad }}"><a href="{{ p.url }}">{{ p.texto }}</a></p>
+        <a class="advice advice-{{ p.severidad }} pendiente" href="{{ p.url }}"><span>{{ p.texto }}</span><span aria-hidden="true">→</span></a>
       {% endfor %}
     </section>
   {% endif %}
@@ -78,41 +78,47 @@
       {% if not d.con_presupuesto %}Ese mes no tiene presupuesto: se usa la mediana de los últimos 3 meses (<span class="tag">media</span>).{% endif %}
     </p>
 
-    <table>
+    <table class="ledger">
       <tbody>
-        <tr><td>Saldo en cuentas</td><td class="positive">{{ "%.2f"|format(d.saldo) }} €</td></tr>
-        <tr><td>− Recibos y fijos que faltan</td><td>{{ "%.2f"|format(d.total_fijos) }} €</td></tr>
-        <tr><td>− Necesidades variables que faltan (súper, gasolina…)</td><td>{{ "%.2f"|format(d.total_variables) }} €</td></tr>
+        <tr><td>Saldo en cuentas</td><td class="positive">{{ d.saldo|eur }}</td></tr>
+        <tr><td>− Recibos y fijos que faltan</td><td>{{ d.total_fijos|eur }}</td></tr>
+        <tr><td>− Necesidades variables que faltan (súper, gasolina…)</td><td>{{ d.total_variables|eur }}</td></tr>
         <tr><td>− Inversión comprometida que falta
-              <span class="muted">({{ "%.2f"|format(d.inversion_hecha) }} € de {{ "%.2f"|format(d.inversion_prevista) }} € hechos)</span></td>
-            <td>{{ "%.2f"|format(d.inversion_pendiente) }} €</td></tr>
-        <tr><td>− Hucha para pagos anuales (seguros, impuestos…)</td><td>{{ "%.2f"|format(d.apartado_anual) }} €</td></tr>
-        <tr><td>− Hucha para vacaciones y compras grandes</td><td>{{ "%.2f"|format(d.apartado_grandes) }} €</td></tr>
+              <span class="muted">({{ d.inversion_hecha|eur }} de {{ d.inversion_prevista|eur }} hechos)</span></td>
+            <td>{{ d.inversion_pendiente|eur }}</td></tr>
+        <tr><td>− Hucha para pagos anuales (seguros, impuestos…)</td><td>{{ d.apartado_anual|eur }}</td></tr>
+        <tr><td>− Hucha para vacaciones y compras grandes</td><td>{{ d.apartado_grandes|eur }}</td></tr>
       </tbody>
       <tfoot>
-        <tr><th>= Libre para gastar hasta la nómina</th><th>{{ "%.2f"|format(d.libre) }} €</th></tr>
+        <tr><th>= Libre para gastar hasta la nómina</th><th>{{ d.libre|eur }}</th></tr>
       </tfoot>
     </table>
 
     {% if d.fijos %}
-      <h3>Recibos y fijos</h3>
+      <details class="desglose">
+      <summary>Recibos y fijos <span class="resumen">{{ d.fijos|selectattr("pendiente", "gt", 0)|list|length }} pendientes de {{ d.fijos|length }}</span></summary>
       {{ tabla_pendientes(d.fijos) }}
+      </details>
     {% endif %}
     {% if d.variables_necesarios %}
-      <h3>Necesidades variables</h3>
+      <details class="desglose">
+      <summary>Necesidades variables <span class="resumen">{{ d.variables_necesarios|selectattr("pendiente", "gt", 0)|list|length }} pendientes de {{ d.variables_necesarios|length }}</span></summary>
       {{ tabla_pendientes(d.variables_necesarios) }}
+      </details>
     {% endif %}
     {% if d.anuales %}
-      <h3>Hucha para pagos anuales</h3>
-      <p class="muted">Se reservan {{ "%.2f"|format(d.apartado_anual) }} € cada mes para llegar a estos recibos
+      <details class="desglose">
+      <summary>Hucha para pagos anuales <span class="resumen">{{ d.anuales|length }} recibos en 12 meses</span></summary>
+      <p class="muted">Se reservan {{ d.apartado_anual|eur }} cada mes para llegar a estos recibos
          de los próximos 12 meses sin que te pillen sin dinero (detalle en <a href="/anual">Año</a>).</p>
-      <table>
+      <table class="ledger">
         <tbody>
           {% for a in d.anuales %}
-            <tr><td>{{ a.etiqueta }}</td><td>{{ "%.2f"|format(a.importe) }} €</td></tr>
+            <tr><td>{{ a.etiqueta }}</td><td>{{ a.importe|eur }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      </details>
     {% endif %}
   </section>
 

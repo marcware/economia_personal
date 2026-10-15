@@ -5,51 +5,55 @@
 {% macro enlace_movimientos(f) -%}
   {% if f.categoria -%}
     <a href="/movimientos?categoria={{ f.categoria.id }}&mes={{ year }}-{{ "%02d"|format(month) }}"
-       title="Ver los movimientos de {{ month_name|lower }}">{{ f.etiqueta }}</a>
+       title="Ver los movimientos de {{ month_name|lower }}">{{ f.categoria.name }}</a>
+    <span class="nota">{{ f.categoria.parent.name }}</span>
   {%- else %}{{ f.etiqueta }}{% endif %}
 {%- endmacro %}
 
 {# Devoluciones ya restadas del gasto (un Bizum que te devuelve su parte, un abono). #}
 {% macro nota_devuelto(f) -%}
-  {% if f.devuelto %}<span class="muted" title="Ya restado del gasto">(te devolvieron {{ "%.2f"|format(f.devuelto) }} €)</span>{% endif %}
+  {% if f.devuelto %}<span class="muted" title="Ya restado del gasto">(te devolvieron {{ f.devuelto|eur }})</span>{% endif %}
 {%- endmacro %}
 
 {% macro fila_presupuesto(f) %}
-  <tr>
-    <td>{{ enlace_movimientos(f) }}{% if f.virtual %} <span class="muted">(compromiso, no editable aquí)</span>{% endif %}
-      {%- if f.budget and f.budget.ajuste_auto == "añadido" %}<span class="tag" title="Añadido automáticamente por gasto reciente">auto</span>{% endif %}</td>
-    <td>
+  <tr class="{{ f.estado }}">
+    <td>{{ enlace_movimientos(f) }}
+      {% if f.budget and f.budget.ajuste_auto == "añadido" %}<span class="tag" title="Añadido automáticamente por gasto reciente">añadido solo</span>{% endif %}
+      {% if f.virtual %}<span class="nota">compromiso; se ajusta en Hitos</span>{% endif %}
+      {% if f.devuelto %}<span class="nota" title="Ya restado del gasto">te devolvieron {{ f.devuelto|eur }}</span>{% endif %}</td>
+    <td class="num">{{ f.gasto|eur }}</td>
+    <td class="avance">
+      <div class="progress-bar" title="{{ f.ratio|round(0, 'floor')|int }} % del límite">
+        <div class="progress-fill {{ f.estado }}" style="width: {{ [[f.ratio, 100]|min, 0]|max }}%"></div>
+      </div>
+    </td>
+    <td class="num pct">{{ f.ratio|round(0, 'floor')|int }} %</td>
+    <td class="num limite">
       {% if f.virtual %}
-        {{ "%.2f"|format(f.gasto) }} € / {{ "%.2f"|format(f.limite) }} €
+        {{ f.limite|eur }}
       {% else %}
-        {{ "%.2f"|format(f.gasto) }} € /
-        <form method="post" action="/presupuestos" class="inline-form" style="display:inline">
+        <form method="post" action="/presupuestos" class="inline-form solo-si-cambia" data-aviso="Límite guardado">
           <input type="hidden" name="category_id" value="{{ f.budget.category_id }}">
           <input type="hidden" name="year" value="{{ year }}">
           <input type="hidden" name="month" value="{{ month }}">
-          <input type="number" step="0.01" name="monthly_limit"
-                 value="{{ "%.2f"|format(f.limite) }}" style="width:6rem">
           <button type="submit" class="button-sm">Guardar</button>
+          <input type="number" step="0.01" name="monthly_limit" aria-label="Límite de {{ f.etiqueta }}"
+                 value="{{ "%.2f"|format(f.limite) }}">
         </form>
       {% endif %}
-      {{ nota_devuelto(f) }}
-      <div class="progress-bar">
-        <div class="progress-fill {{ f.estado }}" style="width: {{ [f.ratio, 100]|min }}%"></div>
-      </div>
     </td>
-    <td>{{ "%.2f"|format(f.restante) }} €</td>
-    <td>{{ f.ratio|round(0, 'floor')|int }}%</td>
-    <td{% if f.media and f.media > f.limite * 1.2 %} class="negative" title="Sueles gastar bastante más que este límite"{% endif %}>
-      {% if f.media %}{{ "%.0f"|format(f.media) }} €{% else %}<span class="muted">—</span>{% endif %}
+    <td class="num{% if f.restante < 0 %} negative{% endif %}">{{ f.restante|eur }}</td>
+    <td class="num{% if f.media and f.media > f.limite * 1.2 %} negative{% endif %}"
+        {%- if f.media and f.media > f.limite * 1.2 %} title="Sueles gastar bastante más que este límite"{% endif %}>
+      {% if f.media %}{{ f.media|eur(0) }}{% else %}<span class="muted">—</span>{% endif %}
     </td>
-    <td>
-      {% if f.virtual %}
-        <span class="muted">ajustar en Hitos</span>
-      {% else %}
-        <form method="post" action="/presupuestos/{{ f.budget.id }}/eliminar">
+    <td class="num">
+      {% if not f.virtual %}
+        <form method="post" action="/presupuestos/{{ f.budget.id }}/eliminar" data-aviso="Presupuesto quitado">
           <input type="hidden" name="year" value="{{ year }}">
           <input type="hidden" name="month" value="{{ month }}">
-          <button type="submit" class="button-sm" style="background:#888">Quitar</button>
+          <button type="submit" class="button-icon" title="Quitar este presupuesto"
+                  aria-label="Quitar el presupuesto de {{ f.etiqueta }}">×</button>
         </form>
       {% endif %}
     </td>
@@ -57,10 +61,11 @@
 {% endmacro %}
 
 {% macro tabla_presupuestos(grupo) %}
-  <table>
+  <table class="presupuesto">
     <thead>
-      <tr><th>Categoría</th><th>Gasto / Límite</th><th>Restante</th><th>%</th>
-          <th title="Lo que has gastado de media al mes en los 6 últimos meses cerrados">Media 6 meses</th><th></th></tr>
+      <tr><th>Categoría</th><th class="num">Gastado</th><th colspan="2">Avance</th><th class="num">Límite</th>
+          <th class="num">Restante</th>
+          <th class="num" title="Lo que has gastado de media al mes en los 6 últimos meses cerrados">Media 6 m</th><th></th></tr>
     </thead>
     <tbody>
       {% for f in grupo.filas %}{{ fila_presupuesto(f) }}{% endfor %}
@@ -68,10 +73,14 @@
     <tfoot>
       <tr>
         <th>Subtotal</th>
-        <th>{{ "%.2f"|format(grupo.total_gasto) }} € / {{ "%.2f"|format(grupo.total_limite) }} €</th>
-        <th>{{ "%.2f"|format(grupo.total_restante) }} €</th>
-        <th>{{ grupo.ratio_total|round(0, 'floor')|int }}%</th>
-        <th>{{ "%.0f"|format(grupo.filas|sum(attribute="media")) }} €</th>
+        <th class="num">{{ grupo.total_gasto|eur }}</th>
+        <th class="avance">
+          <div class="progress-bar"><div class="progress-fill" style="width: {{ [[grupo.ratio_total, 100]|min, 0]|max }}%"></div></div>
+        </th>
+        <th class="num pct">{{ grupo.ratio_total|round(0, 'floor')|int }} %</th>
+        <th class="num">{{ grupo.total_limite|eur }}</th>
+        <th class="num">{{ grupo.total_restante|eur }}</th>
+        <th class="num">{{ (grupo.filas|sum(attribute="media"))|eur(0) }}</th>
         <th></th>
       </tr>
     </tfoot>
@@ -85,14 +94,14 @@
       {% for s in filas %}
         <tr>
           <td>{{ enlace_movimientos(s) }}</td>
-          <td>{{ "%.2f"|format(s.gasto) }} € {{ nota_devuelto(s) }}</td>
+          <td>{{ s.gasto|eur }} {{ nota_devuelto(s) }}</td>
           <td>
             <form method="post" action="/presupuestos" class="inline-form">
               <input type="hidden" name="category_id" value="{{ s.categoria.id }}">
               <input type="hidden" name="year" value="{{ year }}">
               <input type="hidden" name="month" value="{{ month }}">
               <input type="number" step="0.01" name="monthly_limit"
-                     value="{{ "%.2f"|format(s.gasto) }}" style="width:6rem">
+                     value="{{ "%.2f"|format(s.gasto) }}">
               <button type="submit" class="button-sm">{{ texto_boton }}</button>
             </form>
           </td>
@@ -103,47 +112,55 @@
 {% endmacro %}
 
 {% block content %}
-  <h1>Presupuestos mensuales</h1>
-
-  <div class="month-nav">
-    {% if prev_month %}
-      <a href="/presupuestos?year={{ prev_month[0] }}&month={{ prev_month[1] }}">&laquo; anterior</a>
-    {% else %}
-      <span></span>
-    {% endif %}
-    <h2>{{ month_name }} {{ year }}</h2>
-    {% if next_month %}
-      <a href="/presupuestos?year={{ next_month[0] }}&month={{ next_month[1] }}">siguiente &raquo;</a>
-    {% else %}
-      <span></span>
-    {% endif %}
+  <div class="page-head">
+    <h1>Presupuestos</h1>
+    <div class="month-nav">
+      {% if prev_month %}
+        <a href="/presupuestos?year={{ prev_month[0] }}&month={{ prev_month[1] }}">&lsaquo; anterior</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+      <h2>{{ month_name }} {{ year }}</h2>
+      {% if next_month %}
+        <a href="/presupuestos?year={{ next_month[0] }}&month={{ next_month[1] }}">siguiente &rsaquo;</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+    </div>
   </div>
 
-  {% if ajustes %}
-    <section>
-      <h2>🔄 Ajustes automáticos</h2>
-      <p class="muted">El presupuesto de los meses abiertos se adapta a tu gasto reciente: entra una
-         categoría con gasto en al menos 2 de los últimos 6 meses (con su media mensual como límite)
-         y sale la que lleva 6 meses sin gasto. Los importes que ya había no se tocan, ni nada que
-         hayas fijado, editado o quitado tú. Si deshaces un ajuste, no se vuelve a repetir.</p>
-      <table>
-        <tbody>
-          {% for b in ajustes %}
-            <tr>
-              <td>{{ b.category.parent.name }} · {{ b.category.name }}</td>
-              <td>{% if b.ajuste_auto == "añadido" %}añadido ({{ "%.2f"|format(b.monthly_limit) }} €){% else %}quitado: sin gasto en 6 meses{% endif %}</td>
-              <td>
-                <form method="post" action="/presupuestos/{{ b.id }}/deshacer-ajuste">
-                  <input type="hidden" name="year" value="{{ year }}">
-                  <input type="hidden" name="month" value="{{ month }}">
-                  <button type="submit" class="button-sm" style="background:#888">Deshacer</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
+  {% if resumen.filas %}
+    {% set n_superados = resumen.filas|selectattr("estado", "equalto", "over")|list|length %}
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Gastado de lo presupuestado</div>
+        <div class="card-value">{{ resumen.total_gasto|eur }}</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: {{ [[resumen.ratio_total, 100]|min, 0]|max }}%"></div>
+        </div>
+        <div class="card-sub">{{ resumen.ratio_total|round(0, 'floor')|int }} % de {{ resumen.total_limite|eur }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Queda por gastar</div>
+        <div class="card-value {{ 'negative' if resumen.total_restante < 0 }}">{{ resumen.total_restante|eur }}</div>
+        <div class="card-sub">
+          {% if n_superados %}<span class="negative">{{ n_superados }} categoría{{ "s" if n_superados != 1 }} por encima de su límite</span>
+          {% else %}ninguna categoría por encima de su límite{% endif %}
+        </div>
+      </div>
+      {% if balance %}
+        <div class="card">
+          <div class="card-label">Ingresos previstos</div>
+          <div class="card-value">{{ balance.total_ingresos|eur }}</div>
+          <div class="card-sub">el gasto presupuestado es el {{ balance.ratio_gasto|round|int }} %</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Sin asignar</div>
+          <div class="card-value {{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ balance.sin_asignar|eur }}</div>
+          <div class="card-sub">tras gasto, inversión y colchón</div>
+        </div>
+      {% endif %}
+    </div>
   {% endif %}
 
   {% if not resumen.filas %}
@@ -153,66 +170,10 @@
          Puedes copiarlo de otro mes más abajo.</p>
     </section>
   {% else %}
-    {% if balance %}
-      <section>
-        <h2>⚖️ ¿Cabe el plan en lo que cobras?</h2>
-        <p class="muted">Los límites de abajo son topes de gasto, no lo que te puedes gastar.
-           Aquí se ponen al lado de lo que entra. La inversión y lo que se queda en Mediolanum
-           no son gasto: es dinero que sigue siendo tuyo, así que salen del margen, no del gasto.</p>
-        <table>
-          <tbody>
-            {% for i in balance.ingresos %}
-              <tr><td>{{ i.categoria.name }}</td><td class="positive">+{{ "%.2f"|format(i.importe) }} €</td></tr>
-            {% endfor %}
-            <tr><th>Ingresos previstos</th><th class="positive">+{{ "%.2f"|format(balance.total_ingresos) }} €</th></tr>
-            <tr><td>− Fijos (sin la inversión)</td><td>−{{ "%.2f"|format(balance.fijos) }} €</td></tr>
-            <tr><td>− Variables</td><td>−{{ "%.2f"|format(balance.variables) }} €</td></tr>
-            <tr>
-              <th>= Margen</th>
-              <th class="{{ 'positive' if balance.margen >= 0 else 'negative' }}">{{ "%.2f"|format(balance.margen) }} €</th>
-            </tr>
-            <tr><td>&nbsp;&nbsp;· Inversión (compromiso)</td><td>{{ "%.2f"|format(balance.inversion) }} €</td></tr>
-            <tr><td>&nbsp;&nbsp;· Se queda en Mediolanum (colchón)</td><td>{{ "%.2f"|format(balance.colchon) }} €</td></tr>
-            <tr>
-              <th>&nbsp;&nbsp;· Sin asignar</th>
-              <th class="{{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ "%.2f"|format(balance.sin_asignar) }} €</th>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted">
-          El gasto presupuestado es el {{ balance.ratio_gasto|round|int }}% de lo que cobras.
-          A tus cuentas del día a día llegan unos {{ "%.2f"|format(balance.llega_a_cuentas) }} €
-          y el plan (con la inversión) saca {{ "%.2f"|format(resumen.total_limite) }} €.
-          {% if consumo_medio and consumo_medio > balance.fijos + balance.variables %}
-            <strong>Tu gasto real medio de los últimos 6 meses es {{ "%.0f"|format(consumo_medio) }} € al mes:
-            cumplir este plan supone recortar un
-            {{ ((1 - (balance.fijos + balance.variables) / consumo_medio) * 100)|round|int }} %.</strong>
-          {% endif %}
-          {% if balance.sin_asignar < 0 %}
-            <strong class="negative">El plan no cabe: faltan {{ "%.2f"|format(-balance.sin_asignar) }} €;
-            saldrían del colchón o de ahorros.</strong>
-          {% endif %}
-          Ingresos previstos: mediana de {{ balance.meses|join(", ") }}, solo los ingresos que entran
-          todos los meses con un importe parecido (nómina, alquiler); los Bizum que te devuelven no cuentan.
-        </p>
-      </section>
-    {% endif %}
-
-    <section>
-      <h2>🔒 Gastos fijos</h2>
-      <p class="muted">Compromisos recurrentes, el mismo importe (más o menos) todos los meses.
-         Aquí no se recorta: se revisa que siga siendo correcto y se paga.</p>
-      {% if resumen.fijos.filas %}
-        {{ tabla_presupuestos(resumen.fijos) }}
-      {% else %}
-        <p class="muted">Ninguno presupuestado todavía.</p>
-      {% endif %}
-    </section>
-
     <section>
       <h2>✂️ Gastos variables</h2>
-      <p class="muted">Gasto de comportamiento: cambia según lo que hagas este mes.
-         Si quieres ahorrar más, aquí es donde hay margen para recortar.</p>
+      <p class="muted">Cambian según lo que hagas este mes: si quieres ahorrar más, aquí hay margen.
+         Pulsa una categoría para ver sus movimientos; el límite se edita en la propia fila.</p>
       {% if resumen.variables.filas %}
         {{ tabla_presupuestos(resumen.variables) }}
       {% else %}
@@ -221,23 +182,17 @@
     </section>
 
     <section>
-      <table>
-        <tfoot>
-          <tr>
-            <th>Total del mes</th>
-            <th>{{ "%.2f"|format(resumen.total_gasto) }} € / {{ "%.2f"|format(resumen.total_limite) }} €</th>
-            <th>{{ "%.2f"|format(resumen.total_restante) }} €</th>
-            <th>{{ resumen.ratio_total|round(0, 'floor')|int }}%</th>
-          </tr>
-        </tfoot>
-      </table>
-      <p class="muted">
-        El total ya incluye el compromiso de inversión (Bit2Me/Quanloop/ING), marcado
-        como "compromiso, no editable aquí" dentro de Fijos — es dinero real que sale de
-        la cuenta todos los meses, pero no un tope: invertir más nunca cuenta como
-        "presupuesto superado".
-      </p>
+      <h2>🔒 Gastos fijos</h2>
+      <p class="muted">Compromisos recurrentes, más o menos el mismo importe cada mes. Aquí no se recorta:
+         se revisa que siga siendo correcto. Incluye el compromiso de inversión, que no es un tope:
+         invertir más nunca cuenta como presupuesto superado.</p>
+      {% if resumen.fijos.filas %}
+        {{ tabla_presupuestos(resumen.fijos) }}
+      {% else %}
+        <p class="muted">Ninguno presupuestado todavía.</p>
+      {% endif %}
     </section>
+
   {% endif %}
 
   {% if resumen.sin_presupuesto_fijos %}
@@ -256,74 +211,8 @@
     </section>
   {% endif %}
 
-  {% if paso %}
-    <section>
-      <h2>🔁 Dinero de paso</h2>
-      <p class="muted">Lo que pagas por otros y te devuelven (botes, recibos de la inquilina).
-         No cuenta como gasto ni como ingreso, así que no está en ninguna fila de arriba;
-         se enseña aquí para comprobar que lo adelantado ha vuelto.</p>
-      <details>
-        <summary>{{ paso.movimientos|length }} movimiento(s) en {{ month_name|lower }}</summary>
-        <table>
-          <thead><tr><th>Fecha</th><th>Descripción</th><th>Importe</th></tr></thead>
-          <tbody>
-            {% for t in paso.movimientos %}
-              <tr>
-                <td>{{ t.date.strftime('%d/%m/%Y') }}</td>
-                <td>{{ t.description_raw }}</td>
-                <td class="{{ 'positive' if t.amount > 0 else 'negative' }}">{{ "%.2f"|format(t.amount) }} €</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </details>
-      <table>
-        <tbody>
-          <tr><td>Adelantaste</td><td class="negative">−{{ "%.2f"|format(paso.adelantado) }} €</td></tr>
-          <tr><td>Te han devuelto</td><td class="positive">+{{ "%.2f"|format(paso.devuelto) }} €</td></tr>
-          <tr>
-            <th>{% if paso.saldo < 0 %}Falta por devolverte{% elif paso.saldo > 0 %}Te han dado de más{% else %}En paz{% endif %}</th>
-            <th class="{{ 'negative' if paso.saldo < 0 else 'positive' }}">{{ "%.2f"|format(paso.saldo|abs) }} €</th>
-          </tr>
-          <tr>
-            <td>Acumulado de {{ year }} hasta {{ month_name|lower }}:
-              {% if paso.saldo_año < 0 %}falta por devolverte{% elif paso.saldo_año > 0 %}te han dado de más{% else %}en paz{% endif %}</td>
-            <td class="{{ 'negative' if paso.saldo_año < 0 else 'positive' }}">{{ "%.2f"|format(paso.saldo_año|abs) }} €</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-  {% endif %}
-
-  {% if gastos_anuales %}
-    <section>
-      <h2>📅 Gastos anuales</h2>
-      <p class="muted">Caen en bloque una o dos veces al año (seguros, IBI...), no repartidos cada mes.
-         Si un mes concreto sale caro por uno de estos, es lo esperado, no un sobrecoste.
-         El "estimado anual" sale de tu gasto real de los últimos 12 meses.</p>
-      <table>
-        <thead><tr><th>Categoría</th><th>Gastado en {{ year }}</th><th>Estimado anual</th><th>Queda por gastar</th></tr></thead>
-        <tbody>
-          {% for g in gastos_anuales %}
-            <tr>
-              <td>{{ g.etiqueta }}</td>
-              <td>{{ "%.2f"|format(g.gastado_año) }} €</td>
-              <td>{{ "%.2f"|format(g.estimado_anual) }} €</td>
-              <td>
-                {{ "%.2f"|format(g.restante) }} €
-                {% if g.por_mes_restante %}
-                  <span class="muted">(~{{ "%.2f"|format(g.por_mes_restante) }} €/mes en lo que queda de año)</span>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-  {% endif %}
-
   <section>
-    <h2>Hitos de {{ month_name|lower }}</h2>
+    <h2>🎯 Hitos de {{ month_name|lower }}</h2>
     {% if not hitos %}
       <p class="muted">Sin hitos este mes. Un hito es un objetivo concreto que la app vigila
          y sobre el que te avisa en <a href="/consejos">Consejos</a>.</p>
@@ -339,18 +228,18 @@
                 {% if h.actual is none %}
                   <span class="muted">sin datos</span>
                 {% else %}
-                  {{ "%.2f"|format(h.actual) }} {{ h.unidad }}
+                  {% if h.unidad == "€" %}{{ h.actual|eur }}{% else %}{{ h.actual|numero(1) }} {{ h.unidad }}{% endif %}
                   <div class="progress-bar">
                     <div class="progress-fill {{ h.estado }}" style="width: {{ [h.ratio, 100]|min }}%"></div>
                   </div>
                 {% endif %}
               </td>
-              <td><span class="badge {{ h.estado }}">{{ h.estado }}</span></td>
+              <td><span class="badge {{ h.estado }}">{{ {"ok": "en camino", "cumplido": "cumplido", "riesgo": "en riesgo", "incumplido": "incumplido", "pendiente": "pendiente"}.get(h.estado, h.estado) }}</span></td>
               <td>
-                <form method="post" action="/presupuestos/hitos/{{ h.goal.id }}/eliminar">
+                <form method="post" action="/presupuestos/hitos/{{ h.goal.id }}/eliminar" data-aviso="Hito quitado">
                   <input type="hidden" name="year" value="{{ year }}">
                   <input type="hidden" name="month" value="{{ month }}">
-                  <button type="submit" class="button-sm" style="background:#888">Quitar</button>
+                  <button type="submit" class="button-icon" title="Quitar este hito" aria-label="Quitar el hito {{ h.titulo }}">×</button>
                 </form>
               </td>
             </tr>
@@ -359,8 +248,9 @@
       </table>
     {% endif %}
 
-    <h3>Añadir hito</h3>
-    <form method="post" action="/presupuestos/hitos" class="inline-form">
+    <details class="añadir">
+    <summary>Añadir un hito</summary>
+    <form method="post" action="/presupuestos/hitos" class="inline-form" data-aviso="Hito añadido">
       <input type="hidden" name="year" value="{{ year }}">
       <input type="hidden" name="month" value="{{ month }}">
       <select name="goal_type" id="goal-type" required>
@@ -375,7 +265,7 @@
           <option value="{{ c.id }}">{{ c.parent.name }} · {{ c.name }}</option>
         {% endfor %}
       </select>
-      <input type="number" step="0.01" name="target_amount" placeholder="Objetivo" required style="width:7rem">
+      <input type="number" step="0.01" name="target_amount" placeholder="Objetivo" required style="width:8rem">
       <input type="text" name="title" placeholder="Nombre (opcional)">
       <button type="submit" class="button-sm">Añadir hito</button>
     </form>
@@ -389,9 +279,163 @@
         });
       })();
     </script>
+    </details>
   </section>
 
-  <section>
+  {% if resumen.filas %}
+    {% if balance %}
+      <section class="plegable">
+        <details>
+<summary><h2>⚖️ ¿Cabe el plan en lo que cobras?</h2><span class="resumen {{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{% if balance.sin_asignar >= 0 %}sí, sobran {{ balance.sin_asignar|eur }}{% else %}no, faltan {{ (-balance.sin_asignar)|eur }}{% endif %}</span></summary>
+        <p class="muted">Los límites de abajo son topes de gasto, no lo que te puedes gastar.
+           Aquí se ponen al lado de lo que entra. La inversión y lo que se queda en Mediolanum
+           no son gasto: es dinero que sigue siendo tuyo, así que salen del margen, no del gasto.</p>
+        <table class="ledger">
+          <tbody>
+            {% for i in balance.ingresos %}
+              <tr><td>{{ i.categoria.name }}</td><td class="positive">+{{ i.importe|eur }}</td></tr>
+            {% endfor %}
+            <tr class="total"><th>Ingresos previstos</th><th class="positive">+{{ balance.total_ingresos|eur }}</th></tr>
+            <tr><td>− Fijos (sin la inversión)</td><td>−{{ balance.fijos|eur }}</td></tr>
+            <tr><td>− Variables</td><td>−{{ balance.variables|eur }}</td></tr>
+            <tr class="total">
+              <th>= Margen</th>
+              <th class="{{ 'positive' if balance.margen >= 0 else 'negative' }}">{{ balance.margen|eur }}</th>
+            </tr>
+            <tr class="sub"><td>Inversión (compromiso)</td><td>{{ balance.inversion|eur }}</td></tr>
+            <tr class="sub"><td>Se queda en Mediolanum (colchón)</td><td>{{ balance.colchon|eur }}</td></tr>
+            <tr class="sub">
+              <th>Sin asignar</th>
+              <th class="{{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ balance.sin_asignar|eur }}</th>
+            </tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          El gasto presupuestado es el {{ balance.ratio_gasto|round|int }}% de lo que cobras.
+          A tus cuentas del día a día llegan unos {{ balance.llega_a_cuentas|eur }}
+          y el plan (con la inversión) saca {{ resumen.total_limite|eur }}.
+          {% if consumo_medio and consumo_medio > balance.fijos + balance.variables %}
+            <strong>Tu gasto real medio de los últimos 6 meses es {{ consumo_medio|eur(0) }} al mes:
+            cumplir este plan supone recortar un
+            {{ ((1 - (balance.fijos + balance.variables) / consumo_medio) * 100)|round|int }} %.</strong>
+          {% endif %}
+          {% if balance.sin_asignar < 0 %}
+            <strong class="negative">El plan no cabe: faltan {{ (-balance.sin_asignar)|eur }};
+            saldrían del colchón o de ahorros.</strong>
+          {% endif %}
+          Ingresos previstos: mediana de {{ balance.meses|join(", ") }}, solo los ingresos que entran
+          todos los meses con un importe parecido (nómina, alquiler); los Bizum que te devuelven no cuentan.
+        </p>
+      </details>
+</section>
+    {% endif %}
+
+  {% endif %}
+
+  {% if paso %}
+    <section class="plegable">
+      <details>
+<summary><h2>🔁 Dinero de paso</h2><span class="resumen {{ 'negative' if paso.saldo < 0 else '' }}">{% if paso.saldo < 0 %}faltan por devolverte {{ (paso.saldo|abs)|eur }}{% elif paso.saldo > 0 %}te han dado {{ paso.saldo|eur }} de más{% else %}en paz{% endif %}</span></summary>
+      <p class="muted">Lo que pagas por otros y te devuelven (botes, recibos de la inquilina).
+         No cuenta como gasto ni como ingreso, así que no está en ninguna fila de arriba;
+         se enseña aquí para comprobar que lo adelantado ha vuelto.</p>
+      <details>
+        <summary>{{ paso.movimientos|length }} movimiento(s) en {{ month_name|lower }}</summary>
+        <table>
+          <thead><tr><th>Fecha</th><th>Descripción</th><th>Importe</th></tr></thead>
+          <tbody>
+            {% for t in paso.movimientos %}
+              <tr>
+                <td>{{ t.date.strftime('%d/%m/%Y') }}</td>
+                <td>{{ t.description_raw }}</td>
+                <td class="{{ 'positive' if t.amount > 0 else 'negative' }}">{{ t.amount|eur }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      <table class="ledger">
+        <tbody>
+          <tr><td>Adelantaste</td><td class="negative">−{{ paso.adelantado|eur }}</td></tr>
+          <tr><td>Te han devuelto</td><td class="positive">+{{ paso.devuelto|eur }}</td></tr>
+          <tr>
+            <th>{% if paso.saldo < 0 %}Falta por devolverte{% elif paso.saldo > 0 %}Te han dado de más{% else %}En paz{% endif %}</th>
+            <th class="{{ 'negative' if paso.saldo < 0 else 'positive' }}">{{ (paso.saldo|abs)|eur }}</th>
+          </tr>
+          <tr>
+            <td>Acumulado de {{ year }} hasta {{ month_name|lower }}:
+              {% if paso.saldo_año < 0 %}falta por devolverte{% elif paso.saldo_año > 0 %}te han dado de más{% else %}en paz{% endif %}</td>
+            <td class="{{ 'negative' if paso.saldo_año < 0 else 'positive' }}">{{ (paso.saldo_año|abs)|eur }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
+</section>
+  {% endif %}
+
+  {% if gastos_anuales %}
+    <section class="plegable">
+      <details>
+<summary><h2>📅 Gastos anuales</h2><span class="resumen">quedan {{ (gastos_anuales|sum(attribute="restante"))|eur(0) }} por pagar este año</span></summary>
+      <p class="muted">Caen en bloque una o dos veces al año (seguros, IBI...), no repartidos cada mes.
+         Si un mes concreto sale caro por uno de estos, es lo esperado, no un sobrecoste.
+         El "estimado anual" sale de tu gasto real de los últimos 12 meses.</p>
+      <table>
+        <thead><tr><th>Categoría</th><th class="num">Gastado en {{ year }}</th><th class="num">Estimado anual</th><th>Queda por gastar</th></tr></thead>
+        <tbody>
+          {% for g in gastos_anuales %}
+            <tr>
+              <td>{{ g.etiqueta }}</td>
+              <td class="num">{{ g.gastado_año|eur }}</td>
+              <td class="num">{{ g.estimado_anual|eur }}</td>
+              <td>
+                {{ g.restante|eur }}
+                {% if g.por_mes_restante %}
+                  <span class="muted">(~{{ g.por_mes_restante|eur }}/mes en lo que queda de año)</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+</section>
+  {% endif %}
+
+  {% if ajustes %}
+    <section class="plegable">
+      <details>
+      <summary><h2>🔄 Ajustes automáticos</h2><span class="resumen">{{ ajustes|length }} cambio{{ "s" if ajustes|length != 1 }} este mes; se pueden deshacer</span></summary>
+      <p class="muted">El presupuesto de los meses abiertos se adapta a tu gasto reciente: entra una
+         categoría con gasto en al menos 2 de los últimos 6 meses (con su media mensual como límite)
+         y sale la que lleva 6 meses sin gasto. Los importes que ya había no se tocan, ni nada que
+         hayas fijado, editado o quitado tú. Si deshaces un ajuste, no se vuelve a repetir.</p>
+      <table>
+        <tbody>
+          {% for b in ajustes %}
+            <tr>
+              <td>{{ b.category.parent.name }} · {{ b.category.name }}</td>
+              <td>{% if b.ajuste_auto == "añadido" %}añadido ({{ b.monthly_limit|eur }}){% else %}quitado: sin gasto en 6 meses{% endif %}</td>
+              <td>
+                <form method="post" action="/presupuestos/{{ b.id }}/deshacer-ajuste">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  <input type="hidden" name="month" value="{{ month }}">
+                  <button type="submit" class="button-sm button-secondary">Deshacer</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </details>
+    </section>
+  {% endif %}
+
+  <section class="plegable">
+    <details{% if not resumen.filas %} open{% endif %}>
+    <summary><h2>⚙️ Preparar el mes</h2><span class="resumen">añadir presupuesto · copiar de otro mes · objetivo 50/30/20</span></summary>
+  <div class="form-grid">
+  <section class="sub">
     <h2>Añadir presupuesto</h2>
     <form method="post" action="/presupuestos" class="inline-form">
       <input type="hidden" name="year" value="{{ year }}">
@@ -407,7 +451,7 @@
     </form>
   </section>
 
-  <section>
+  <section class="sub">
     <h2>Copiar de otro mes</h2>
     <form method="post" action="/presupuestos/copiar" class="inline-form">
       <input type="hidden" name="destino_year" value="{{ year }}">
@@ -427,15 +471,19 @@
     </form>
   </section>
 
-  <section>
+  <section class="sub">
     <h2>Objetivo 50/30/20</h2>
     <form method="post" action="/presupuestos/ajustes" class="inline-form">
       <input type="hidden" name="year" value="{{ year }}">
       <input type="hidden" name="month" value="{{ month }}">
-      <label>Necesidades <input type="number" step="1" name="needs_pct" value="{{ settings.needs_pct }}" style="width:4rem"> %</label>
-      <label>Deseos <input type="number" step="1" name="wants_pct" value="{{ settings.wants_pct }}" style="width:4rem"> %</label>
-      <label>Ahorro <input type="number" step="1" name="savings_pct" value="{{ settings.savings_pct }}" style="width:4rem"> %</label>
+      <label>Necesidades <input type="number" step="1" name="needs_pct" value="{{ settings.needs_pct }}" style="width:4.5rem"> %</label>
+      <label>Deseos <input type="number" step="1" name="wants_pct" value="{{ settings.wants_pct }}" style="width:4.5rem"> %</label>
+      <label>Ahorro <input type="number" step="1" name="savings_pct" value="{{ settings.savings_pct }}" style="width:4.5rem"> %</label>
       <button type="submit" class="button-sm">Guardar</button>
     </form>
   </section>
+  </div>
+    </details>
+  </section>
+
 {% endblock %}
