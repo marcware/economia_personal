@@ -95,6 +95,8 @@ SEED_RULES: list[tuple[str, bool, AmountSign, str, str, int]] = [
     ("REPSOL", False, AmountSign.ANY, "Vehículo y transporte", "Gasolina y combustible", 130),
     ("CEPSA", False, AmountSign.ANY, "Vehículo y transporte", "Gasolina y combustible", 130),
     ("GASOLINERA", False, AmountSign.ANY, "Vehículo y transporte", "Gasolina y combustible", 130),
+    ("MOEVE", False, AmountSign.ANY, "Vehículo y transporte", "Gasolina y combustible", 130),  # antes Cepsa
+    ("GALP", False, AmountSign.ANY, "Vehículo y transporte", "Gasolina y combustible", 130),  # incl. abonos de campaña
     # Ocio y suscripciones
     ("NETFLIX", False, AmountSign.ANY, "Otros gastos", "Suscripciones", 130),
     ("SPOTIFY", False, AmountSign.ANY, "Otros gastos", "Suscripciones", 130),
@@ -127,6 +129,7 @@ SEED_RULES: list[tuple[str, bool, AmountSign, str, str, int]] = [
     # Inversión
     ("FONDOS-PLANES", False, AmountSign.ANY, "Inversión", "Otras inversiones", 130),
     ("QUANLOOP", False, AmountSign.ANY, "Inversión", "Otras inversiones", 130),
+    ("TRADE REPUBLIC", False, AmountSign.ANY, "Inversión", "Otras inversiones", 130),  # compra periódica de oro
     # Suscripciones de software/streaming adicionales
     ("OPENAI", False, AmountSign.ANY, "Otros gastos", "Suscripciones", 130),
     ("MEETIC", False, AmountSign.ANY, "Otros gastos", "Suscripciones", 130),
