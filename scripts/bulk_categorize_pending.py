@@ -190,7 +190,7 @@ RULES: list[tuple[str, bool, str, str]] = [
     ("AREAS ", False, "Vehículo y transporte", "Gasolina y combustible"),
     ("EMPRESA MIXTA DE TRAFICO", False, "Vehículo y transporte", "Gasolina y combustible"),
     ("FISIO ", False, "Educación y salud", "Farmacia, herbolario y nutrición"),
-    ("ABONO DE PRESTAMO", False, "Otros gastos", "Otros préstamos y avales"),
+    ("ABONO DE PRESTAMO", False, "Otros ingresos", "Abono de financiación"),
     ("COMISION SIEMPRE CUBIERTO", False, "Otros gastos", "Suscripciones"),
     # Bizum mensual de 50€ a un segundo gimnasio/entrenador (confirmado por Marcos):
     # sin esto caía en el cajón genérico de "Gasto Bizum".

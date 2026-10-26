@@ -52,7 +52,8 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Otros gastos", "Seguros", BudgetGroup.NECESIDAD, False, True, True),
     ("Otros gastos", "Suscripciones", BudgetGroup.DESEO, False, True, False),
     ("Otros gastos", "Transferencias", None, False, False, False),
-    ("Otros ingresos", "Abono de financiación", BudgetGroup.INGRESO, False, False, False),
+    # Un préstamo abonado en cuenta no es ingreso ni devuelve gasto: ni suma ni resta.
+    ("Otros ingresos", "Abono de financiación", BudgetGroup.EXCLUIDO, False, False, False),
     ("Otros ingresos", "Ingreso Bizum", BudgetGroup.INGRESO, False, False, False),
     ("Otros ingresos", "Ingresos de otras entidades", BudgetGroup.INGRESO, False, False, False),
     ("Otros ingresos", "Alquiler cobrado", BudgetGroup.INGRESO, False, False, False),

@@ -99,7 +99,8 @@ Layout is a standard layered FastAPI app under `app/`:
   spend and can leave it negative when the refund lands in a different month than the charge; other
   services (dashboard, advisor 50/30/20, anual) still count only negatives. Income, everywhere, is only
   a positive movement in an INGRESO-group category (a loan paid into the account or a refund is not
-  income); `budget_service.ingresos_base` is the shared "income to measure the month against" (expected
+  income; a loan disbursement goes to the EXCLUIDO "Abono de financiación", never to the loan-repayment
+  category, where it would net against the instalments as a refund); `budget_service.ingresos_base` is the shared "income to measure the month against" (expected
   income while the month is open) used by hitos, the 50/30/20 rule and the dashboard.
   "Dinero de paso" (paid on someone's behalf and paid back: botes, the tenant's bills) is excluded from
   both spend and income; `budget_service.dinero_de_paso` only lists it on `/presupuestos` with the
@@ -115,7 +116,10 @@ Layout is a standard layered FastAPI app under `app/`:
   if it has none, the median of the previous 3 months. For variable NECESIDAD categories it reserves the
   larger of budget and that median (a too-low grocery ceiling must not inflate "libre"). It reuses
   `budget_service` for the investment commitment and `anual_service.hucha_anual` for the annual set-aside
-  (the same figure `/anual` shows) rather than recomputing them. It also subtracts
+  (the same figure `/anual` shows) rather than recomputing them. The pay cycle's own month is not in that
+  set-aside (it starts the month after, via `hucha_anual(tras=…)`): that month's `anual` payments are
+  reserved as pending fixed costs instead — budget if any, else `anual_service.pagos_anuales_mes` —
+  or, right after payday, they'd be counted twice. It also subtracts
   `anual_service.hucha_grandes`: the monthly set-aside for big non-monthly discretionary spend
   (holidays, electronics), derived from history — months where a variable DESEO category ran
   ≥ `UMBRAL_PICO` over its 12-month median — with no category flag behind it.

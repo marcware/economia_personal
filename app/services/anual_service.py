@@ -152,8 +152,25 @@ def _ingresos_previstos(db: Session, hoy: date) -> float:
     return total
 
 
-def hucha_anual(db: Session, hoy: date | None = None) -> dict:
+def pagos_anuales_mes(db: Session, year: int, month: int, hoy: date | None = None) -> dict[int, float]:
+    """Lo previsto para (year, month) en cada categoría anual: el mismo número que /anual
+    pone en esa celda (presupuesto, mismo mes del año pasado o un mes normal)."""
+    hoy = hoy or date.today()
+    categorias = load_categories(db)
+    df = load_transactions_df(db)
+    gasto = _gasto_por_mes(df) if not df.empty else {}
+    prevision = _Prevision(db, gasto, categorias, hoy)
+    return {
+        c.id: prevision.mes(c.id, year, month)["importe"]
+        for c in categorias.values() if c.anual and c.parent_id is not None
+    }
+
+
+def hucha_anual(db: Session, hoy: date | None = None, tras: tuple[int, int] | None = None) -> dict:
     """Pagos anuales de los próximos 12 meses y cuánto apartar al mes para llegar a todos.
+
+    Los 12 meses empiezan después de `tras` (por defecto, el mes de `hoy`): el mes que ya
+    se paga con lo que hay en cuenta no entra, o sus recibos se reservarían dos veces.
 
     `aportacion` es la cantidad constante mínima que, empezando hoy desde cero, cubre cada
     pago a tiempo: max sobre k de (pagos acumulados hasta el mes k) / k. Es mayor que el
@@ -167,7 +184,7 @@ def hucha_anual(db: Session, hoy: date | None = None) -> dict:
     anuales = [c for c in categorias.values() if c.anual and c.parent_id is not None]
 
     meses, acumulado, aportacion = [], 0.0, 0.0
-    ym = (hoy.year, hoy.month)
+    ym = tras or (hoy.year, hoy.month)
     for k in range(1, MESES_HUCHA + 1):
         ym = _mes_siguiente(*ym)
         conceptos = []

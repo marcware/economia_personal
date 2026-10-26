@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from app.categorization.seed_rules import CATEGORY_TREE
 from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup
 from app.services import budget_service, dashboard_service, disponible_service
 
@@ -40,6 +41,20 @@ def test_un_prestamo_abonado_no_es_ingreso(db, categoria, movimiento):
     assert s["gastos"] == pytest.approx(411.77)
     assert s["ahorro"] == pytest.approx(2588.23)
     assert dashboard_service.evolution(db, 1)[0]["ingresos"] == pytest.approx(3000.0)
+
+
+def test_un_prestamo_abonado_no_resta_de_las_cuotas(db, categoria, movimiento):
+    grupos = {(padre, hoja): grupo for padre, hoja, grupo, *_ in CATEGORY_TREE}
+    assert grupos[("Otros ingresos", "Abono de financiación")] == BudgetGroup.EXCLUIDO
+    cuotas = categoria("Otros préstamos y avales", BudgetGroup.NECESIDAD, recurrente=True)
+    abono = categoria("Abono de financiación", BudgetGroup.EXCLUIDO)
+    movimiento(date(2026, 9, 8), 2000, abono)
+    movimiento(date(2026, 9, 3), -411.77, cuotas)
+
+    gasto = budget_service.month_expense_by_category(db, 2026, 9)
+    assert gasto[cuotas.id] == pytest.approx(411.77)
+    assert abono.id not in gasto
+    assert dashboard_service.monthly_summary(db, 2026, 9)["ingresos"] == pytest.approx(0.0)
 
 
 def test_ciclo_de_nomina(db, categoria, movimiento):
@@ -103,6 +118,28 @@ def test_libre_hasta_la_nomina(db, cuenta, categoria, movimiento):
     assert [f["origen"] for f in d["variables_necesarios"]] == ["habitual"]
     assert d["libre"] == pytest.approx(2000 - 128 - 150)  # los restaurantes no se reservan
     assert d["dias"] == 23 and d["libre_por_dia"] == pytest.approx(d["libre"] / 23)
+
+
+def test_recibo_anual_tras_cobrar_no_se_reserva_dos_veces(db, categoria, movimiento):
+    nomina = categoria("Nómina", BudgetGroup.INGRESO)
+    ibi = categoria("IBI", BudgetGroup.NECESIDAD, recurrente=True, anual=True)
+    seguro = categoria("Seguro hogar", BudgetGroup.NECESIDAD, recurrente=True, anual=True)
+    for mes in (7, 8):
+        movimiento(date(2026, mes, 27), 2858.39, nomina)
+    movimiento(date(2026, 9, 28), 2858.39, nomina)  # cobrada: el ciclo ya es el de octubre
+    movimiento(date(2025, 10, 5), -346.60, ibi)
+    movimiento(date(2025, 10, 15), -200, seguro)  # sin presupuesto: sale de la previsión
+    db.add(Budget(category_id=ibi.id, year=2026, month=10, monthly_limit=346.60))
+    db.commit()
+
+    d = disponible_service.disponible(db, date(2026, 9, 29))
+
+    assert d["mes_presupuesto"] == (2026, 10)
+    assert {f["etiqueta"].split(" · ")[1]: f["pendiente"] for f in d["fijos"]} == pytest.approx(
+        {"IBI": 346.60, "Seguro hogar": 200.0}
+    )
+    assert d["apartado_anual"] == pytest.approx(0.0)  # los de octubre no van también a la hucha
+    assert d["anuales"] == []
 
 
 def test_copiar_un_mes_conserva_lo_decidido_a_mano(db, categoria, movimiento):

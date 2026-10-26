@@ -174,22 +174,20 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
     }
 
     fijos, variables_necesarios = [], []
-    anuales_presupuestadas = set()
+    pagos_anuales = anual_service.pagos_anuales_mes(db, year, month, hoy)
     for cat in db.query(Category).filter(Category.parent_id.isnot(None)).all():
         if cat.is_transfer_category or cat.budget_group in (
             BudgetGroup.AHORRO, BudgetGroup.INGRESO, BudgetGroup.EXCLUIDO, None
         ):
             continue
-        if cat.anual:
-            # Los anuales solo cuentan como pago pendiente si están presupuestados en
-            # este mes (su mes de vencimiento); si no, van al apartado anual de abajo.
-            if cat.id not in presupuestos:
-                continue
-            anuales_presupuestadas.add(cat.id)
-        elif not cat.recurrente and cat.budget_group != BudgetGroup.NECESIDAD:
+        if cat.anual and cat.id not in presupuestos:
+            # El recibo anual que vence en el mes del ciclo se paga con lo que hay en cuenta:
+            # se reserva aquí con la previsión de /anual. Los de meses posteriores van a la
+            # hucha de abajo, que empieza después de este mes.
+            previsto, origen = pagos_anuales.get(cat.id, 0.0), "año pasado"
+        elif not cat.anual and not cat.recurrente and cat.budget_group != BudgetGroup.NECESIDAD:
             continue  # deseos variables: es precisamente lo que el "libre" deja decidir
-
-        if cat.id in presupuestos:
+        elif cat.id in presupuestos:
             previsto, origen = presupuestos[cat.id], "presupuesto"
             if not cat.recurrente:
                 # Un tope de súper más bajo que lo que de verdad gastas no hace que comas
@@ -223,8 +221,9 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
     inversion_pendiente = max(inversion_prevista - inversion_hecha, 0.0)
 
     # La misma hucha que /anual: cuota constante que llega a los recibos de los próximos
-    # 12 meses (empieza el mes que viene, así que no duplica lo presupuestado en este).
-    hucha = anual_service.hucha_anual(db, hoy)
+    # 12 meses. Empieza tras el mes del ciclo, no tras el de hoy: cobrada la nómina del 27
+    # de septiembre, los recibos de octubre ya están arriba como fijos pendientes.
+    hucha = anual_service.hucha_anual(db, hoy, tras=(year, month))
     apartado_anual = hucha["aportacion"]
     anuales = [
         {"etiqueta": f"{c['etiqueta']} ({m['nombre'].lower()})", "importe": c["importe"]}
