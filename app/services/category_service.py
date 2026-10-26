@@ -22,8 +22,9 @@ def assign_category(
 
     transaction.category_id = category_id
     transaction.manually_categorized = True
-    if category.is_transfer_category:
-        transaction.is_transfer = True
+    # En los dos sentidos: sacar un movimiento de "Traspaso entre cuentas" tiene que volver
+    # a contarlo (si no, sigue oculto en /movimientos y fuera de todos los totales).
+    transaction.is_transfer = category.is_transfer_category
 
     recategorized = 0
     if apply_to_similar:

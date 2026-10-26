@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Account, Category, Transaction
+from app.models import Account, BudgetGroup, Category, Transaction
 from app.services.category_service import assign_category
 from app.services.dashboard_service import MONTHS_ES
 from app.templating import templates
@@ -43,6 +43,11 @@ def movimientos_home(
 
     if categoria == "sin_clasificar":
         query = query.filter(Transaction.category_id.is_(None))
+    elif categoria == "ahorro":
+        # Todo el grupo AHORRO: lo que suma la fila de compromiso de inversión de /presupuestos.
+        query = query.join(Category, Category.id == Transaction.category_id).filter(
+            Category.budget_group == BudgetGroup.AHORRO
+        )
     elif categoria:
         query = query.filter(Transaction.category_id == int(categoria))
 

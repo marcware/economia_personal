@@ -14,6 +14,7 @@
     <select name="categoria">
       <option value="" {{ 'selected' if not categoria }}>Todas las categorías</option>
       <option value="sin_clasificar" {{ 'selected' if categoria == 'sin_clasificar' }}>Sin clasificar</option>
+      <option value="ahorro" {{ 'selected' if categoria == 'ahorro' }}>Ahorro e inversión (todas)</option>
       {% for c in categories %}
         <option value="{{ c.id }}" {{ 'selected' if categoria == c.id|string }}>{{ c.parent.name }} · {{ c.name }}</option>
       {% endfor %}

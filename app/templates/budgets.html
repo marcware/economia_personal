@@ -7,6 +7,9 @@
     <a href="/movimientos?categoria={{ f.categoria.id }}&mes={{ year }}-{{ "%02d"|format(month) }}"
        title="Ver los movimientos de {{ month_name|lower }}">{{ f.categoria.name }}</a>
     <span class="nota">{{ f.categoria.parent.name }}</span>
+  {%- elif f.virtual -%}
+    <a href="/movimientos?categoria=ahorro&mes={{ year }}-{{ "%02d"|format(month) }}"
+       title="Ver las aportaciones de ahorro e inversión de {{ month_name|lower }}">{{ f.etiqueta }}</a>
   {%- else %}{{ f.etiqueta }}{% endif %}
 {%- endmacro %}
 
