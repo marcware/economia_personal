@@ -86,8 +86,14 @@
         <tr><td>− Inversión comprometida que falta
               <span class="muted">({{ d.inversion_hecha|eur }} de {{ d.inversion_prevista|eur }} hechos)</span></td>
             <td>{{ d.inversion_pendiente|eur }}</td></tr>
-        <tr><td>− Hucha para pagos anuales (seguros, impuestos…)</td><td>{{ d.apartado_anual|eur }}</td></tr>
-        <tr><td>− Hucha para vacaciones y compras grandes</td><td>{{ d.apartado_grandes|eur }}</td></tr>
+        <tr><td>− Huchas que faltan por pasar a la {{ d.huchas.cuenta }}
+              <span class="muted">({{ d.traspasado_huchas|eur }} de {{ d.huchas.cuota|eur }} pasados)</span></td>
+            <td>{{ d.huchas_pendiente|eur }}</td></tr>
+        {% if d.huchas.falta > 0 %}
+        <tr><td>− Para arrancar las huchas, de una vez
+              <span class="muted">(en la {{ d.huchas.cuenta }} hay {{ (d.huchas.saldo or 0)|eur }} de {{ d.huchas.objetivo|eur }})</span></td>
+            <td>{{ d.huchas.falta|eur }}</td></tr>
+        {% endif %}
       </tbody>
       <tfoot>
         <tr><th>= Libre para gastar hasta la nómina</th><th>{{ d.libre|eur }}</th></tr>
@@ -106,11 +112,19 @@
       {{ tabla_pendientes(d.variables_necesarios) }}
       </details>
     {% endif %}
+    <details class="desglose">
+    <summary>Huchas <span class="resumen">{{ d.huchas.cuota|eur(0) }} al mes a la {{ d.huchas.cuenta }}</span></summary>
+    <p class="muted">Dinero para lo que no cabe en un mes normal. Cada mes se pasa su cuota a la {{ d.huchas.cuenta }}
+       y, cuando llega el pago, sale de ahí. Detalle en <a href="/presupuestos#huchas">Presupuestos</a>.</p>
+    <table class="ledger">
+      <tbody>
+        {% for x in d.huchas.huchas %}
+          <tr><td>{{ x.nombre }} <span class="muted">({{ x.ejemplo }})</span></td><td>{{ x.cuota|eur }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
     {% if d.anuales %}
-      <details class="desglose">
-      <summary>Hucha para pagos anuales <span class="resumen">{{ d.anuales|length }} recibos en 12 meses</span></summary>
-      <p class="muted">Se reservan {{ d.apartado_anual|eur }} cada mes para llegar a estos recibos
-         de los próximos 12 meses sin que te pillen sin dinero (detalle en <a href="/anual">Año</a>).</p>
+      <p class="muted">Recibos de los próximos 12 meses:</p>
       <table class="ledger">
         <tbody>
           {% for a in d.anuales %}
@@ -118,8 +132,8 @@
           {% endfor %}
         </tbody>
       </table>
-      </details>
     {% endif %}
+    </details>
   </section>
 
   <script>

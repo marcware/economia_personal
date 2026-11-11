@@ -30,8 +30,12 @@ MESES_FUTUROS_SELECCIONABLES = 3
 # el mes en curso, y en cuántos de ellos tiene que haber gasto para añadir un presupuesto.
 # Pedir 2 meses evita que una compra puntual (un ordenador) cree un tope mensual.
 VENTANA_AJUSTE_MESES = 6
-# Meses cerrados de la columna "media" de /presupuestos (ver media_gasto_reciente).
+# Meses cerrados de lo que "sueles gastar" en /presupuestos (ver gasto_habitual).
 MESES_MEDIA_GASTO = 6
+# Un límite es poco realista si lo que sueles gastar lo supera en este factor y en al menos
+# esta cantidad: entonces casi todos los meses saldría "te has pasado".
+FACTOR_POCO_REALISTA = 1.5
+MARGEN_POCO_REALISTA = 30.0
 MESES_CON_GASTO_PARA_AÑADIR = 2
 
 
@@ -99,16 +103,17 @@ def _estado(ratio: float) -> str:
     return "ok"
 
 
-def media_gasto_reciente(db: Session, hoy: date | None = None) -> dict[int, float]:
-    """Gasto medio mensual por categoría en los MESES_MEDIA_GASTO meses cerrados anteriores
-    a hoy (los meses sin gasto cuentan como 0). Es solo una referencia para leer el límite:
-    cuánto se gasta de verdad frente a lo que se ha puesto de tope."""
+def gasto_habitual(db: Session, hoy: date | None = None) -> dict[int, float]:
+    """Lo que sueles gastar al mes en cada categoría: mediana de los MESES_MEDIA_GASTO meses
+    cerrados anteriores a hoy (los meses sin gasto cuentan como 0). Mediana y no media para
+    que un mes raro (las vacaciones, una avería) no lo dispare. Es la referencia para leer
+    el límite: cuánto se gasta de verdad frente a lo que se ha puesto de tope."""
     hoy = hoy or date.today()
     fin = date(hoy.year, hoy.month, 1)
     y, m = divmod(fin.year * 12 + fin.month - 1 - MESES_MEDIA_GASTO, 12)
     inicio = date(y, m + 1, 1)
     filas = (
-        db.query(Transaction.category_id, func.sum(Transaction.amount))
+        db.query(Transaction.category_id, func.strftime("%Y-%m", Transaction.date), func.sum(Transaction.amount))
         .filter(
             Transaction.category_id.isnot(None),
             Transaction.amount < 0,
@@ -116,10 +121,16 @@ def media_gasto_reciente(db: Session, hoy: date | None = None) -> dict[int, floa
             Transaction.date >= inicio,
             Transaction.date < fin,
         )
-        .group_by(Transaction.category_id)
+        .group_by(Transaction.category_id, func.strftime("%Y-%m", Transaction.date))
         .all()
     )
-    return {cid: -float(total) / MESES_MEDIA_GASTO for cid, total in filas}
+    por_categoria: dict[int, list[float]] = {}
+    for cid, _mes, total in filas:
+        por_categoria.setdefault(cid, []).append(-float(total))
+    return {
+        cid: statistics.median(meses + [0.0] * (MESES_MEDIA_GASTO - len(meses)))
+        for cid, meses in por_categoria.items()
+    }
 
 
 def budget_rows(
@@ -128,19 +139,34 @@ def budget_rows(
     """Una fila por presupuesto activo del mes, con su gasto real y su estado.
 
     Orden: primero los fijos (recurrentes, hay que pagarlos sí o sí), después los
-    variables (donde tiene sentido intentar recortar); dentro de cada grupo, alfabético
-    — así siempre se sabe dónde buscar una categoría concreta.
+    variables (donde tiene sentido intentar recortar); dentro de cada grupo, de más a menos
+    gasto, así lo que se lleva el dinero sale arriba y lo que no tiene gasto, al final.
     """
+    # Aquí y no arriba: anual_service importa este módulo.
+    from app.services.anual_service import MEDIANA_MAX_IMPREVISTO, UMBRAL_IMPREVISTO, UMBRAL_PICO
+
     gastos = month_expense_by_category(db, year, month, month_df)
     devuelto = month_refunds_by_category(db, year, month, month_df)
     budgets = db.query(Budget).filter_by(active=True, year=year, month=month).all()
-    medias = media_gasto_reciente(db)
+    habituales = gasto_habitual(db)
 
     filas = []
     for b in budgets:
         gasto = gastos.get(b.category_id, 0.0)
         limite = float(b.monthly_limit)
         ratio = (gasto / limite * 100) if limite > 0 else 0.0
+        habitual = habituales.get(b.category_id, 0.0)
+        poco_realista = habitual >= limite * FACTOR_POCO_REALISTA and habitual - limite >= MARGEN_POCO_REALISTA
+        exceso = max(gasto - limite, 0.0)
+        # Un golpe que no cabe en un mes normal lo paga su hucha (ver huchas_service) con
+        # el mismo criterio con que se calcula: no es "te has pasado".
+        hucha = None
+        if not b.category.recurrente and exceso > 0:
+            grupo = b.category.budget_group
+            if grupo == BudgetGroup.NECESIDAD and habitual <= MEDIANA_MAX_IMPREVISTO and exceso >= UMBRAL_IMPREVISTO:
+                hucha = "viajes e imprevistos"
+            elif grupo == BudgetGroup.DESEO and exceso >= UMBRAL_PICO:
+                hucha = "viajes e imprevistos"
         filas.append({
             "budget": b,
             "categoria": b.category,
@@ -149,21 +175,39 @@ def budget_rows(
             "virtual": False,
             "gasto": gasto,
             "devuelto": devuelto.get(b.category_id, 0.0),
-            "media": medias.get(b.category_id, 0.0),
+            "habitual": habitual,
+            "poco_realista": poco_realista,
+            # Lo que sueles gastar, redondeado hacia arriba a 5 €: el límite que se propone.
+            "propuesta": math.ceil(habitual / 5) * 5 if poco_realista else None,
             "limite": limite,
             "restante": limite - gasto,
+            "exceso": 0.0 if hucha else exceso,
+            "hucha": hucha,
+            "cubierto": exceso if hucha else 0.0,
             "ratio": max(min(ratio, 999), 0),
-            "estado": _estado(ratio),
+            "estado": "pendiente" if hucha else _estado(ratio),
         })
-    filas.sort(key=lambda f: (not f["recurrente"], f["etiqueta"]))
+    filas.sort(key=lambda f: (not f["recurrente"], -f["gasto"], f["etiqueta"]))
     return filas
 
 
 def _subtotales(filas: list[dict]) -> dict:
+    """Totales de un grupo. Además del neto (límite − gasto), separa lo que te has pasado en
+    unas categorías de lo que te sobra en otras (el neto los compensa y esconde ambos) y de
+    lo que paga una hucha."""
     limite = sum(f["limite"] for f in filas)
     gasto = sum(f["gasto"] for f in filas)
+    pasadas = [f for f in filas if f["exceso"] > 0 and not f["virtual"]]
+    cubiertas = [f for f in filas if f.get("hucha")]
+    bien = [f for f in filas if f not in pasadas and f not in cubiertas]
     return {
         "filas": filas,
+        "pasadas": pasadas,
+        "cubiertas": cubiertas,
+        "cubierto": sum(f["cubierto"] for f in cubiertas),
+        "bien": bien,
+        "excesos": sum(f["gasto"] - f["limite"] for f in pasadas),
+        "sobrante": sum(max(f["limite"] - f["gasto"], 0.0) for f in bien),
         "total_limite": limite,
         "total_gasto": gasto,
         "total_restante": limite - gasto,
@@ -242,7 +286,12 @@ def _fila_inversion(db: Session, year: int, month: int, month_df: pd.DataFrame |
         "etiqueta": "Inversión",
         "recurrente": True,
         "virtual": True,
-        "media": 0.0,
+        "habitual": 0.0,
+        "hucha": None,
+        "cubierto": 0.0,
+        "poco_realista": False,
+        "propuesta": None,
+        "exceso": 0.0,
         "gasto": gastado,
         "limite": objetivo,
         "restante": max(objetivo - gastado, 0.0),
@@ -264,7 +313,7 @@ def budget_summary(
     filas = budget_rows(db, year, month, df)
     fila_inversion = _fila_inversion(db, year, month, df)
     if fila_inversion is not None:
-        filas = sorted([*filas, fila_inversion], key=lambda f: (not f["recurrente"], f["etiqueta"]))
+        filas = sorted([*filas, fila_inversion], key=lambda f: (not f["recurrente"], -f["gasto"], f["etiqueta"]))
     gastos = month_expense_by_category(db, year, month, df)
     devuelto = month_refunds_by_category(db, year, month, df)
 
@@ -276,6 +325,8 @@ def budget_summary(
         categoria = db.get(Category, cid)
         if categoria is None or categoria.is_transfer_category:
             continue
+        if categoria.budget_group == BudgetGroup.EXCLUIDO:
+            continue  # ni gasto ni ingreso: venta de patrimonio, abono de financiación...
         if categoria.budget_group == BudgetGroup.AHORRO:
             # Un presupuesto es un tope máximo ("Límite mensual"); gastar más en ahorro
             # o inversión es bueno, no algo que capar. Ese objetivo se fija como hito
@@ -371,27 +422,42 @@ def ingresos_base(db: Session, year: int, month: int, ingresos_reales: float) ->
     return ingresos_reales
 
 
+def _ingresos_regulares(db: Session, year: int, month: int) -> dict[int, float]:
+    """Ingreso previsto del mes por categoría: mediana de los MESES_INGRESOS meses cerrados
+    de cada ingreso regular, salvo los que ya se han acabado (Category.fin_ingreso)."""
+    meses = _meses_ingresos(year, month)
+    inicio = date(year, month, 1)
+    previstos = {}
+    for cid, por_mes in _ingresos_por_mes(db, meses).items():
+        if not _es_regular(por_mes, meses):
+            continue
+        categoria = db.get(Category, cid)
+        if categoria is not None and categoria.fin_ingreso is not None and categoria.fin_ingreso < inicio:
+            continue
+        previstos[cid] = statistics.median(por_mes[ym] for ym in meses)
+    return previstos
+
+
 def ingresos_previstos(db: Session, year: int, month: int) -> float:
     """Total de ingresos regulares previstos para el mes (los mismos de balance_mes)."""
-    meses = _meses_ingresos(year, month)
-    return sum(
-        statistics.median(por_mes[ym] for ym in meses)
-        for por_mes in _ingresos_por_mes(db, meses).values()
-        if _es_regular(por_mes, meses)
-    )
+    return sum(_ingresos_regulares(db, year, month).values())
 
 
-def balance_mes(db: Session, year: int, month: int, resumen: dict) -> dict | None:
+def balance_mes(db: Session, year: int, month: int, resumen: dict, huchas: float = 0.0) -> dict | None:
     """Ingresos previstos del mes frente a lo presupuestado: cuánto margen queda y a dónde va.
 
     El total del presupuesto es una suma de topes de gasto; sin ponerlo al lado de lo que
     entra no dice si el plan cabe. Aquí:
 
         margen = ingresos regulares previstos - gasto presupuestado (fijos + variables)
-        margen = inversión + colchón en Mediolanum + sin asignar
+        margen = inversión + huchas + sin asignar (lo que sobra para ahorrar)
 
-    La inversión y lo que se queda en Mediolanum no son gasto (es dinero que sigue siendo
-    tuyo), así que se enseñan como destino del margen, no restando como un gasto más.
+    La inversión y las huchas (cuota mensual de huchas_service, que se pasa desde fuera
+    porque ese módulo depende de este) no son gasto del mes: es dinero que sigue siendo
+    tuyo, así que se enseñan como destino del margen, no restando como un gasto más. Lo
+    que sobra puede quedarse en Mediolanum; `colchon` es lo que se ha quedado allí de
+    verdad los últimos meses y `traspaso_necesario` lo que el plan necesita pasar de allí
+    a las cuentas del día a día.
 
     Los ingresos previstos son la mediana de los últimos MESES_INGRESOS meses cerrados de
     cada ingreso regular (ver _es_regular). El colchón es lo que, de esos ingresos, se
@@ -399,15 +465,8 @@ def balance_mes(db: Session, year: int, month: int, resumen: dict) -> dict | Non
     """
     meses = _meses_ingresos(year, month)
 
-    ingresos = []
-    for cid, por_mes in _ingresos_por_mes(db, meses).items():
-        if not _es_regular(por_mes, meses):
-            continue
-        categoria = db.get(Category, cid)
-        ingresos.append({
-            "categoria": categoria,
-            "importe": statistics.median(por_mes[ym] for ym in meses),
-        })
+    ingresos = [{"categoria": db.get(Category, cid), "importe": importe}
+                for cid, importe in _ingresos_regulares(db, year, month).items()]
     if not ingresos:
         return None
     ingresos.sort(key=lambda i: -i["importe"])
@@ -441,6 +500,7 @@ def balance_mes(db: Session, year: int, month: int, resumen: dict) -> dict | Non
     gasto_presupuestado = resumen["total_limite"] - inversion
     margen = total_ingresos - gasto_presupuestado
 
+    sin_asignar = margen - inversion - huchas
     return {
         "meses": [f"{MONTHS_ES[m].lower()}" for _, m in meses],
         "ingresos": ingresos,
@@ -450,8 +510,10 @@ def balance_mes(db: Session, year: int, month: int, resumen: dict) -> dict | Non
         "gasto_presupuestado": gasto_presupuestado,
         "margen": margen,
         "inversion": inversion,
+        "huchas": huchas,
         "colchon": colchon,
-        "sin_asignar": margen - inversion - colchon,
+        "sin_asignar": sin_asignar,
+        "traspaso_necesario": total_ingresos - max(sin_asignar, 0.0),
         # Lo que llega a las cuentas del día a día y lo que sale de ellas según el plan.
         "llega_a_cuentas": total_ingresos - colchon,
         "ratio_gasto": gasto_presupuestado / total_ingresos * 100,

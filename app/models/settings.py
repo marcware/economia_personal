@@ -17,4 +17,7 @@ class UserSettings(Base):
     wants_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("30"))
     savings_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20"))
     anomaly_stddev_multiplier: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("1.5"))
+    # Cuota mensual de la hucha de viajes e imprevistos, la decide el usuario (ver
+    # huchas_service). None = la que se sugiere del histórico.
+    hucha_variable: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

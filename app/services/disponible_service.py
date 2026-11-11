@@ -10,7 +10,8 @@ está llena pero buena parte ya tiene dueño.
             - fijos que faltan por cobrarse antes de la próxima nómina
             - inversión comprometida que falta por hacer
             - necesidades variables que aún faltan (súper, gasolina, farmacia...)
-            - apartado para gastos anuales (seguros, impuestos...)
+            - cuota de las huchas que falta por pasar a la Cuenta Naranja (recibos
+              anuales, viajes e imprevistos; ver huchas_service)
 
 Es la idea de "Safe to Spend" (Rocket Money) / "In My Pocket" (PocketGuard) y de las
 "true expenses" de YNAB, calculada con los presupuestos del mes si existen y, si no,
@@ -28,7 +29,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup, Category, Transaction
-from app.services import anual_service, budget_service
+from app.services import anual_service, budget_service, huchas_service
 from app.services.dashboard_service import MONTHS_ES
 
 # Meses naturales cerrados que se usan para estimar un gasto cuando no hay presupuesto.
@@ -220,24 +221,26 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
     inversion_hecha = sum(v for cid, v in gastado.items() if cid in ids_ahorro)
     inversion_pendiente = max(inversion_prevista - inversion_hecha, 0.0)
 
-    # La misma hucha que /anual: cuota constante que llega a los recibos de los próximos
-    # 12 meses. Empieza tras el mes del ciclo, no tras el de hoy: cobrada la nómina del 27
-    # de septiembre, los recibos de octubre ya están arriba como fijos pendientes.
-    hucha = anual_service.hucha_anual(db, hoy, tras=(year, month))
-    apartado_anual = hucha["aportacion"]
+    # Las huchas (recibos anuales, viajes e imprevistos; ver huchas_service): su cuota
+    # del mes es dinero que tiene que salir hacia la Cuenta Naranja. Lo que ya se ha pasado
+    # en este ciclo ya no está en el saldo y no se reserva otra vez. La de recibos empieza
+    # tras el mes del ciclo: cobrada la nómina del 27 de septiembre, los recibos de octubre
+    # ya están arriba como fijos pendientes.
+    h = huchas_service.huchas(db, hoy, tras=(year, month))
+    recibos, variable = h["huchas"]
+    apartado_anual, apartado_variable = recibos["cuota"], variable["cuota"]
+    recibos = recibos["detalle"]
     anuales = [
         {"etiqueta": f"{c['etiqueta']} ({m['nombre'].lower()})", "importe": c["importe"]}
-        for m in hucha["meses"] for c in m["conceptos"]
+        for m in recibos["meses"] for c in m["conceptos"]
     ]
-
-    # Y la de los gastos gordos que no son mensuales (vacaciones, un portátil): si no se
-    # reservan mes a mes, el día que llegan se pagan con préstamo.
-    grandes = anual_service.hucha_grandes(db, hoy)
-    apartado_grandes = grandes["aportacion"]
+    traspasado_huchas = huchas_service.traspasado(db, ciclo["inicio"], hoy)
+    huchas_pendiente = max(h["cuota"] - traspasado_huchas, 0.0)
 
     total_fijos = sum(f["pendiente"] for f in fijos)
     total_variables = sum(f["pendiente"] for f in variables_necesarios)
-    comprometido = total_fijos + total_variables + inversion_pendiente + apartado_anual + apartado_grandes
+    # Y, mientras no se haya hecho, lo que falta para que arranquen con lo que les toca.
+    comprometido = total_fijos + total_variables + inversion_pendiente + huchas_pendiente + h["falta"]
     libre = saldo - comprometido
     dias = max((ciclo["siguiente"] - hoy).days, 1)
 
@@ -259,8 +262,10 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
         "inversion_pendiente": inversion_pendiente,
         "anuales": anuales,
         "apartado_anual": apartado_anual,
-        "grandes": grandes,
-        "apartado_grandes": apartado_grandes,
+        "apartado_variable": apartado_variable,
+        "huchas": h,
+        "traspasado_huchas": traspasado_huchas,
+        "huchas_pendiente": huchas_pendiente,
         "comprometido": comprometido,
         "libre": libre,
         "dias": dias,

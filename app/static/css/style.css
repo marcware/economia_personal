@@ -721,3 +721,8 @@ tr.ingresos td, tr.ingresos th { color: var(--accent-ink); }
   .card-hero { grid-column: 1 / -1; }
   section { padding: 1rem; }
 }
+
+/* Gastos variables (/presupuestos): aviso de límite poco realista dentro de la fila. */
+.presupuesto .aviso-limite { margin-top: 0.25rem; gap: 0.5rem; align-items: center; }
+.presupuesto .aviso-limite .nota { display: inline; }
+.presupuesto td.diferencia { white-space: nowrap; }

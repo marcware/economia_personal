@@ -37,6 +37,15 @@ def plan(posicion: dict) -> dict | None:
     return None
 
 
+def cuenta_ahorro(posicion: dict) -> float | None:
+    """Saldo de la cuenta de ahorro (Cuenta Naranja), donde se guardan las huchas: no sale en
+    la conexión bancaria, pero viene en la misma posición global."""
+    for p in posicion.get("products") or []:
+        if p.get("type") == "SAVINGS_ACCOUNT":
+            return float(p.get("balanceToShow") or 0)
+    return None
+
+
 def _fecha(texto: str) -> date:
     return datetime.strptime(texto, "%d/%m/%Y").date()
 

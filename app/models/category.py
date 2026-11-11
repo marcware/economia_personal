@@ -1,6 +1,7 @@
 import enum
+from datetime import date
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -36,6 +37,10 @@ class Category(Base):
     # cifra anual, para que un importe grande en un mes concreto no se lea como un
     # sobrecoste sino como el pago anual que le toca.
     anual: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Solo para ingresos: último día en que se cobra (un alquiler de una vivienda vendida).
+    # Desde el mes siguiente no cuenta como ingreso previsto aunque los meses de atrás sí
+    # lo tengan (ver budget_service.balance_mes).
+    fin_ingreso: Mapped[date | None] = mapped_column(Date, default=None)
 
     parent: Mapped["Category | None"] = relationship(remote_side=[id], back_populates="children")
     children: Mapped[list["Category"]] = relationship(back_populates="parent")

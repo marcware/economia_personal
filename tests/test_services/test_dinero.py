@@ -226,3 +226,74 @@ def test_enlazar_por_api_no_duplica_lo_importado_a_mano(db, movimiento):
 
     r = sync_service.sync_account(db, Cliente(), mediolanum)
     assert (r["inserted"], r["duplicated"]) == (1, 1)
+
+
+def test_variables_separan_lo_pasado_de_lo_que_sobra(db, categoria, movimiento):
+    hoy = date.today()
+    super_ = categoria("Súper", BudgetGroup.NECESIDAD)
+    bares = categoria("Bares", BudgetGroup.DESEO)
+    ropa = categoria("Ropa", BudgetGroup.DESEO)
+    venta = categoria("Venta de patrimonio", BudgetGroup.EXCLUIDO)
+    for cat, limite in ((super_, 200), (bares, 70), (ropa, 60)):
+        budget_service.upsert_budget(db, cat.id, hoy.year, hoy.month, limite)
+    # Bares: unos 400 € cada uno de los 6 meses cerrados anteriores.
+    inicio = hoy.replace(day=1)
+    for i in range(1, 7):
+        y, m = divmod(inicio.year * 12 + inicio.month - 1 - i, 12)
+        movimiento(date(y, m + 1, 15), -400, bares)
+    movimiento(hoy.replace(day=1), -150, super_)
+    movimiento(hoy.replace(day=1), -100, bares)
+    movimiento(hoy.replace(day=1), -2000, venta)  # excluido: ni presupuesto ni "sin presupuestar"
+
+    v = budget_service.budget_summary(db, hoy.year, hoy.month)
+    variables = v["variables"]
+    assert [f["categoria"].name for f in variables["pasadas"]] == ["Bares"]
+    assert variables["excesos"] == pytest.approx(30)
+    assert variables["sobrante"] == pytest.approx(50 + 60)
+    # De más a menos gasto; la que no tiene gasto, al final.
+    assert [f["categoria"].name for f in variables["filas"]] == ["Súper", "Bares", "Ropa"]
+    bares_fila = variables["pasadas"][0]
+    assert bares_fila["habitual"] == pytest.approx(400)
+    assert bares_fila["poco_realista"] and bares_fila["propuesta"] == 400
+    assert not v["sin_presupuesto"]
+
+
+def test_huchas_arranque_y_traspasos(db, cuenta, movimiento):
+    from app.services import huchas_service
+
+    # Recibos: 600 € en el mes 2 y 0 el resto; con 50 €/mes hacen falta 500 € ya.
+    hucha = {"meses": [{"total": 0}, {"total": 600}] + [{"total": 0}] * 10}
+    assert huchas_service._inicial_recibos(hucha, 50) == pytest.approx(500)
+
+    otra = Account(bank=Bank.ING, name="Préstamos")
+    db.add(otra)
+    db.commit()
+    dia = date(2026, 11, 2)
+
+    def traspaso(importe, en, texto="Traspaso interno emitido"):
+        tx = movimiento(dia, importe, en=en, traspaso=True)
+        tx.description_normalized = texto.upper()
+        db.commit()
+
+    traspaso(-400, cuenta)
+    traspaso(400, otra, "Traspaso interno recibido")  # entre cuentas conectadas: no cuenta
+    traspaso(-150, cuenta)  # sin pareja: a la Cuenta Naranja
+    traspaso(-0.35, cuenta, "Traspaso emitido a Francisco")  # redondeo de ING
+    traspaso(-180.8, cuenta, "Recibo Suma gestion tributaria")  # dinero de paso, no es traspaso
+    assert huchas_service.traspasado(db, date(2026, 11, 1), date(2026, 11, 30)) == pytest.approx(150.35)
+
+
+def test_la_averia_la_paga_la_hucha(db, categoria, movimiento):
+    hoy = date.today()
+    casa = categoria("Mantenimiento del hogar", BudgetGroup.NECESIDAD)
+    bares = categoria("Bares", BudgetGroup.DESEO)
+    budget_service.upsert_budget(db, casa.id, hoy.year, hoy.month, 10)
+    budget_service.upsert_budget(db, bares.id, hoy.year, hoy.month, 70)
+    movimiento(hoy.replace(day=1), -460, casa)  # el fontanero
+    movimiento(hoy.replace(day=1), -100, bares)
+
+    v = budget_service.budget_summary(db, hoy.year, hoy.month)["variables"]
+    assert [f["categoria"].name for f in v["cubiertas"]] == ["Mantenimiento del hogar"]
+    assert v["cubierto"] == pytest.approx(450)
+    assert [f["categoria"].name for f in v["pasadas"]] == ["Bares"]  # 30 € de más no es una avería
+    assert v["excesos"] == pytest.approx(30)

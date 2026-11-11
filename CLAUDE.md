@@ -184,18 +184,31 @@ Layout is a standard layered FastAPI app under `app/`:
   free to spend *until the next payday*, not per calendar month — the salary lands ~27th and funds the
   following month, and the big fixed charges (mortgage 1st, loans 3rd, utilities ~10th) fall after it.
   `libre = saldo de cuentas API (sin Mediolanum) − fijos pendientes − necesidades variables pendientes −
-  inversión pendiente − apartado anual`. The payday is auto-detected (largest INGRESO category); a pay
+  inversión pendiente − cuota de las huchas que falta por pasar − lo que falta para arrancarlas`. The
+  payday is auto-detected (largest INGRESO category); a pay
   cycle maps to the budget month it ends in (27 sep → 26 oct = octubre), using that month's budgets or,
   if it has none, the median of the previous 3 months. For variable NECESIDAD categories it reserves the
   larger of budget and that median (a too-low grocery ceiling must not inflate "libre"). It reuses
-  `budget_service` for the investment commitment and `anual_service.hucha_anual` for the annual set-aside
-  (the same figure `/anual` shows) rather than recomputing them. The pay cycle's own month is not in that
-  set-aside (it starts the month after, via `hucha_anual(tras=…)`): that month's `anual` payments are
+  `budget_service` for the investment commitment and `huchas_service` for the set-asides rather than
+  recomputing them. The pay cycle's own month is not in the annual set-aside (it starts the month after,
+  via `hucha_anual(tras=…)`): that month's `anual` payments are
   reserved as pending fixed costs instead — budget if any, else `anual_service.pagos_anuales_mes` —
-  or, right after payday, they'd be counted twice. It also subtracts
-  `anual_service.hucha_grandes`: the monthly set-aside for big non-monthly discretionary spend
-  (holidays, electronics), derived from history — months where a variable DESEO category ran
-  ≥ `UMBRAL_PICO` over its 12-month median — with no category flag behind it.
+  or, right after payday, they'd be counted twice.
+  [huchas_service.py](app/services/huchas_service.py) holds the two "huchas", money set aside every
+  month for what doesn't fit a normal month and kept outside the day-to-day accounts, in ING's Cuenta
+  Naranja (a savings account the PSD2 connection doesn't expose: `scripts/scrape_ing.py` reads its
+  balance from the same position-keeping response and stores it as the `ManualAssetEntry` "Cuenta
+  Naranja"). *Recibos anuales* is computed (`anual_service.hucha_anual`: the excess over a normal month
+  of each `anual` category in the next 12 months; with the hucha already topped up, its monthly average
+  suffices — `inicial` is what must be there today for that to arrive in time). *Viajes e imprevistos*
+  has a quota the user chooses (`UserSettings.hucha_variable`); the suggestion comes from history:
+  `anual_service.hucha_grandes` (months where a variable DESEO category ran ≥ `UMBRAL_PICO` over its
+  median) plus `hucha_imprevistos` (lumpy NECESIDAD categories, median ≤ `MEDIANA_MAX_IMPREVISTO`,
+  ≥ `UMBRAL_IMPREVISTO` over it — house, garage, appliances), with no category flag behind either.
+  What has already gone to the Cuenta Naranja this cycle is `traspasado`: outgoing "TRASPASO…"
+  transfers without a matching incoming one in another account the app knows (ING's round-ups
+  included). On `/presupuestos`, a variable category's overspend that meets those same thresholds is
+  shown as paid by the hucha, not as "te has pasado".
   [pendientes_service.py](app/services/pendientes_service.py) builds the short "Pendiente" strip on the
   home page (budgets exceeded, hitos at risk, recent uncategorized movements, bank consent about to
   expire); it only counts and links, the arithmetic stays in `budget_service`/`goal_service`.
@@ -221,7 +234,9 @@ Layout is a standard layered FastAPI app under `app/`:
   (NECESIDAD/DESEO/AHORRO/INGRESO/EXCLUIDO, drives the 50/30/20 rule), `recurrente` (same amount every
   month, a commitment already made — e.g. the gym is DESEO but recurrente) and `anual` (only meaningful
   when `recurrente=True`: lands in one or two lump payments a year — insurance, IBI — rather than spread
-  monthly; see `budget_service.gastos_anuales`). `AHORRO`-group categories are never budgeted as a
+  monthly; see `budget_service.gastos_anuales`). Each yearly bill wants its own `anual` category so `/anual` and the
+  hucha see it: SUMA charges IBI and car tax with the same description, so they are split by amount rules
+  (`CategorizationRule.min_abs_amount`, larger first) into IBI Palacete / IBI cochera / Impuesto del coche. `AHORRO`-group categories are never budgeted as a
   ceiling (see `Budget` below) — track a savings/investment floor as a `GoalType.INVERSION_MIN` hito
   instead.
 - **advisor/** — the "financial coach" advice engine. [engine.py](app/advisor/engine.py)'s `get_advice()`
@@ -246,11 +261,16 @@ already have budgets) also adapt on their own: `budget_service.ajustar_mes` adds
 months — altas/bajas only, never recalculating existing limits, and never touching anything the user set,
 edited or removed by hand (`Budget.fijado`, which `copy_month` carries over, including hand-removed
 rows). It runs on opening `/presupuestos` and `/` and after
-`scripts/sync_accounts.py`; automatic changes are flagged in `Budget.ajuste_auto` and can be undone. The month's budget total is a
+`scripts/sync_accounts.py`; automatic changes are flagged in `Budget.ajuste_auto` and can be undone. On the page, variable categories are split into "te has pasado" and "van bien" (sorted by
+spend, untouched ones last), because the net `limite − gasto` hides overspend behind unspent
+ceilings; each row shows `gasto_habitual` (median of the last 6 closed months, robust to a holiday
+month) and, when that is ≥ `FACTOR_POCO_REALISTA` × the limit, offers to raise the limit to it. The month's budget total is a
 sum of ceilings, not "what you can spend": `budget_service.balance_mes` puts it next to expected income
 (median of the last 3 closed months of each *regular* INGRESO category — present every month with a
 stable amount, so nómina/alquiler count and Bizum refunds don't) and splits the margin into investment,
-what stays in Mediolanum after the transfer to ING (the colchón — savings, not spend) and unassigned. `FinancialGoal`
+the huchas and what's left to save (which can stay in Mediolanum; `traspaso_necesario` is what the plan
+needs moved from there to ING). An income that has ended (the rent of a sold flat) is cut with
+`Category.fin_ingreso`, or the 3-month median would keep counting it. `FinancialGoal`
 ([app/models/goal.py](app/models/goal.py)) is the analogous per-month row for hitos, a closed
 `GoalType` enum rather than a rules DSL — extend the enum + `goal_service._actual`/`_estado` dispatch for
 a new kind of goal, don't add a generic expression language. Income-based hitos (`AHORRO_MIN`,

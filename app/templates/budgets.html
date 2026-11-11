@@ -46,9 +46,9 @@
       {% endif %}
     </td>
     <td class="num{% if f.restante < 0 %} negative{% endif %}">{{ f.restante|eur }}</td>
-    <td class="num{% if f.media and f.media > f.limite * 1.2 %} negative{% endif %}"
-        {%- if f.media and f.media > f.limite * 1.2 %} title="Sueles gastar bastante más que este límite"{% endif %}>
-      {% if f.media %}{{ f.media|eur(0) }}{% else %}<span class="muted">—</span>{% endif %}
+    <td class="num{% if f.poco_realista %} negative{% endif %}"
+        {%- if f.poco_realista %} title="Sueles gastar bastante más que este límite"{% endif %}>
+      {% if f.habitual %}{{ f.habitual|eur(0) }}{% else %}<span class="muted">—</span>{% endif %}
     </td>
     <td class="num">
       {% if not f.virtual %}
@@ -68,7 +68,7 @@
     <thead>
       <tr><th>Categoría</th><th class="num">Gastado</th><th colspan="2">Avance</th><th class="num">Límite</th>
           <th class="num">Restante</th>
-          <th class="num" title="Lo que has gastado de media al mes en los 6 últimos meses cerrados">Media 6 m</th><th></th></tr>
+          <th class="num" title="Lo que sueles gastar: mediana de los 6 últimos meses cerrados">Sueles</th><th></th></tr>
     </thead>
     <tbody>
       {% for f in grupo.filas %}{{ fila_presupuesto(f) }}{% endfor %}
@@ -83,10 +83,108 @@
         <th class="num pct">{{ grupo.ratio_total|round(0, 'floor')|int }} %</th>
         <th class="num">{{ grupo.total_limite|eur }}</th>
         <th class="num">{{ grupo.total_restante|eur }}</th>
-        <th class="num">{{ (grupo.filas|sum(attribute="media"))|eur(0) }}</th>
+        <th class="num">{{ (grupo.filas|sum(attribute="habitual"))|eur(0) }}</th>
         <th></th>
       </tr>
     </tfoot>
+  </table>
+{% endmacro %}
+
+{# Gastos variables: cuánto podías, cuánto llevas y, fila a fila, cuánto te has pasado o te queda. #}
+{% macro fila_variable(f) %}
+  <tr class="{{ f.estado }}">
+    <td>{{ enlace_movimientos(f) }}
+      {% if f.budget and f.budget.ajuste_auto == "añadido" %}<span class="tag" title="Añadido automáticamente por gasto reciente">añadido solo</span>{% endif %}
+      {% if f.devuelto %}<span class="nota" title="Ya restado del gasto">te devolvieron {{ f.devuelto|eur }}</span>{% endif %}
+      {% if f.poco_realista %}
+        <form method="post" action="/presupuestos" class="inline-form aviso-limite" data-aviso="Límite subido">
+          <input type="hidden" name="category_id" value="{{ f.budget.category_id }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="monthly_limit" value="{{ f.propuesta }}">
+          <span class="nota negative" title="Con este límite casi todos los meses te pasarás">sueles gastar {{ f.habitual|eur(0) }}</span>
+          <button type="submit" class="button-sm button-secondary">Subir a {{ f.propuesta|eur(0) }}</button>
+        </form>
+      {% elif f.habitual %}<span class="nota">sueles gastar {{ f.habitual|eur(0) }}</span>{% endif %}
+    </td>
+    <td class="avance">
+      <div class="progress-bar" title="{{ f.ratio|round(0, 'floor')|int }} % del límite">
+        <div class="progress-fill {{ f.estado }}" style="width: {{ [[f.ratio, 100]|min, 0]|max }}%"></div>
+      </div>
+    </td>
+    <td class="num">{{ f.gasto|eur }}</td>
+    <td class="num limite">
+      <form method="post" action="/presupuestos" class="inline-form solo-si-cambia" data-aviso="Límite guardado">
+        <input type="hidden" name="category_id" value="{{ f.budget.category_id }}">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="button-sm">Guardar</button>
+        <input type="number" step="0.01" name="monthly_limit" aria-label="Límite de {{ f.etiqueta }}"
+               value="{{ "%.2f"|format(f.limite) }}">
+      </form>
+    </td>
+    <td class="num diferencia">
+      {% if f.hucha %}<span class="muted">la hucha de {{ f.hucha|lower }} paga</span> {{ f.cubierto|eur }}
+      {% elif f.exceso > 0 %}<span class="negative">te has pasado {{ f.exceso|eur }}</span>
+      {% else %}<span class="muted">te quedan</span> {{ f.restante|eur }}{% endif %}
+    </td>
+    <td class="num">
+      <form method="post" action="/presupuestos/{{ f.budget.id }}/eliminar" data-aviso="Presupuesto quitado">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="button-icon" title="Quitar este presupuesto"
+                aria-label="Quitar el presupuesto de {{ f.etiqueta }}">×</button>
+      </form>
+    </td>
+  </tr>
+{% endmacro %}
+
+{% macro gastos_variables(v) %}
+  {% set pasado = v.total_gasto - v.cubierto - v.total_limite %}
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Podías gastar</div>
+      <div class="card-value">{{ v.total_limite|eur }}</div>
+      <div class="card-sub">la suma de los límites de abajo</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Llevas</div>
+      <div class="card-value">{{ v.total_gasto|eur }}</div>
+      <div class="progress-bar">
+        <div class="progress-fill {{ 'over' if pasado > 0 }}" style="width: {{ [[v.ratio_total, 100]|min, 0]|max }}%"></div>
+      </div>
+      <div class="card-sub">{% if v.cubierto %}{{ v.cubierto|eur(0) }} los paga una hucha · {% endif %}{% if progreso_mes %}día {{ progreso_mes[0] }} de {{ progreso_mes[1] }} del mes{% elif mes_futuro %}el mes aún no ha empezado{% else %}mes cerrado{% endif %}</div>
+    </div>
+    <div class="card{{ ' card-hero' if pasado <= 0 }}">
+      <div class="card-label">{{ 'Te has pasado' if pasado > 0 else 'Te queda' }}</div>
+      <div class="card-value {{ 'negative' if pasado > 0 else 'positive' }}">{{ pasado|abs|eur }}</div>
+      <div class="card-sub">{% if pasado > 0 %}{{ (pasado / v.total_limite * 100)|round|int }} % más de lo que podías{% else %}para lo que queda de mes{% endif %}{% if v.cubierto %}, sin contar lo que paga la hucha{% endif %}</div>
+    </div>
+  </div>
+  {% if v.pasadas %}
+    <p>Te has pasado en <strong>{{ v.pasadas|length }} categoría{{ "s" if v.pasadas|length != 1 }}</strong>
+       (<span class="negative">{{ v.excesos|eur }} de más</span>){% if v.sobrante > 0 %}; en las demás te sobran
+       {{ v.sobrante|eur }}, que compensan en parte{% endif %}.</p>
+  {% endif %}
+  <table class="presupuesto">
+    <thead>
+      <tr><th>Categoría</th><th>Avance</th><th class="num">Llevas</th><th class="num">Límite</th>
+          <th class="num">Diferencia</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% if v.pasadas %}
+        <tr class="seccion"><th colspan="6">Te has pasado</th></tr>
+        {% for f in v.pasadas %}{{ fila_variable(f) }}{% endfor %}
+      {% endif %}
+      {% if v.cubiertas %}
+        <tr class="seccion"><th colspan="6">Lo paga una hucha</th></tr>
+        {% for f in v.cubiertas %}{{ fila_variable(f) }}{% endfor %}
+      {% endif %}
+      {% if v.bien %}
+        <tr class="seccion"><th colspan="6">Van bien</th></tr>
+        {% for f in v.bien %}{{ fila_variable(f) }}{% endfor %}
+      {% endif %}
+    </tbody>
   </table>
 {% endmacro %}
 
@@ -158,9 +256,9 @@
           <div class="card-sub">el gasto presupuestado es el {{ balance.ratio_gasto|round|int }} %</div>
         </div>
         <div class="card">
-          <div class="card-label">Sin asignar</div>
+          <div class="card-label">Sobra para ahorrar</div>
           <div class="card-value {{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ balance.sin_asignar|eur }}</div>
-          <div class="card-sub">tras gasto, inversión y colchón</div>
+          <div class="card-sub">tras gasto, inversión y huchas</div>
         </div>
       {% endif %}
     </div>
@@ -178,7 +276,7 @@
       <p class="muted">Cambian según lo que hagas este mes: si quieres ahorrar más, aquí hay margen.
          Pulsa una categoría para ver sus movimientos; el límite se edita en la propia fila.</p>
       {% if resumen.variables.filas %}
-        {{ tabla_presupuestos(resumen.variables) }}
+        {{ gastos_variables(resumen.variables) }}
       {% else %}
         <p class="muted">Ninguno presupuestado todavía.</p>
       {% endif %}
@@ -196,6 +294,71 @@
       {% endif %}
     </section>
 
+  {% endif %}
+
+  {% if huchas %}
+    {% set hs = huchas %}
+    <section class="plegable" id="huchas">
+      <details{% if hs.falta > 0 %} open{% endif %}>
+      <summary><h2>🐷 Huchas</h2>
+        <span class="resumen">{{ hs.cuota|eur(0) }} al mes a la {{ hs.cuenta }}{% if hs.falta > 0 %} · faltan {{ hs.falta|eur(0) }} para arrancar{% endif %}</span></summary>
+      <p class="muted">Para lo que no cabe en un mes normal. Cada mes pasas la cuota a la {{ hs.cuenta }}; cuando llega
+         el recibo, la avería o el viaje, sale de ahí y no revienta el presupuesto del mes.</p>
+      <div class="cards">
+        <div class="card">
+          <div class="card-label">Cada mes</div>
+          <div class="card-value">{{ hs.cuota|eur }}</div>
+          <div class="card-sub">a la {{ hs.cuenta }} al cobrar la nómina</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Debería haber hoy</div>
+          <div class="card-value">{{ hs.objetivo|eur }}</div>
+          <div class="card-sub">para llegar a todo a tiempo</div>
+        </div>
+        <div class="card{{ ' card-hero' if hs.falta > 0 }}">
+          <div class="card-label">Hay ahora</div>
+          <div class="card-value">{% if hs.saldo is not none %}{{ hs.saldo|eur }}{% else %}—{% endif %}</div>
+          <div class="card-sub">{% if hs.falta > 0 %}<strong>pasa {{ hs.falta|eur }} de una vez</strong> para arrancar{% else %}las huchas están al día{% endif %}
+            {% if hs.fecha_saldo %}· saldo al {{ hs.fecha_saldo.strftime('%d/%m') }}{% endif %}</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Hucha</th><th class="num">Al mes</th><th class="num">Debería haber hoy</th><th>De dónde sale</th></tr></thead>
+        <tbody>
+          {% set recibos, variable = hs.huchas %}
+          <tr>
+            <td><strong>{{ recibos.nombre }}</strong><span class="nota">{{ recibos.ejemplo }}</span></td>
+            <td class="num">{{ recibos.cuota|eur }}<span class="nota">se calcula sola</span></td>
+            <td class="num">{{ recibos.inicial|eur }}</td>
+            <td class="muted">
+              {% for m in recibos.detalle.meses if m.total >= 50 %}{{ m.nombre|lower }}: {% for c in m.conceptos if c.importe >= 50 %}{{ c.etiqueta.split(' · ')[-1] }} {{ c.importe|eur(0) }}{{ ", " if not loop.last }}{% endfor %}{{ " · " if not loop.last }}{% endfor %}
+              <span class="nota">próximos 12 meses: {{ recibos.detalle.total|eur(0) }} sobre un mes normal</span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>{{ variable.nombre }}</strong><span class="nota">{{ variable.ejemplo }}</span></td>
+            <td class="num">
+              <form method="post" action="/presupuestos/hucha-variable" class="inline-form solo-si-cambia" data-aviso="Hucha guardada">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="month" value="{{ month }}">
+                <button type="submit" class="button-sm">Guardar</button>
+                <input type="number" step="1" min="0" name="cuota" value="{{ '%.0f'|format(variable.cuota) }}" aria-label="Cuota mensual de la hucha de viajes e imprevistos">
+              </form>
+              <span class="nota">la decides tú{% if not variable.elegida %} (sugerida){% endif %}</span>
+            </td>
+            <td class="num">{{ variable.inicial|eur }}</td>
+            <td class="muted">
+              {% for p in variable.picos[:5] %}{{ p.etiqueta.split(' · ')[-1] }} {{ p.nombre|lower }}: {{ p.importe|eur(0) }}{{ ", " if not loop.last }}{% endfor %}
+              <span class="nota">lo que no cupo en un mes normal; repetirlo costaría {{ variable.sugerida|eur(0) }}/mes.
+                Para arrancar, la avería más cara vista.</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted">El saldo de la {{ hs.cuenta }} se actualiza al entrar en ING desde
+         <a href="/inversiones/plan-ing">el plan de pensiones</a>.</p>
+      </details>
+    </section>
   {% endif %}
 
   {% if resumen.sin_presupuesto_fijos %}
@@ -291,7 +454,7 @@
         <details>
 <summary><h2>⚖️ ¿Cabe el plan en lo que cobras?</h2><span class="resumen {{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{% if balance.sin_asignar >= 0 %}sí, sobran {{ balance.sin_asignar|eur }}{% else %}no, faltan {{ (-balance.sin_asignar)|eur }}{% endif %}</span></summary>
         <p class="muted">Los límites de abajo son topes de gasto, no lo que te puedes gastar.
-           Aquí se ponen al lado de lo que entra. La inversión y lo que se queda en Mediolanum
+           Aquí se ponen al lado de lo que entra. La inversión y las huchas
            no son gasto: es dinero que sigue siendo tuyo, así que salen del margen, no del gasto.</p>
         <table class="ledger">
           <tbody>
@@ -306,25 +469,30 @@
               <th class="{{ 'positive' if balance.margen >= 0 else 'negative' }}">{{ balance.margen|eur }}</th>
             </tr>
             <tr class="sub"><td>Inversión (compromiso)</td><td>{{ balance.inversion|eur }}</td></tr>
-            <tr class="sub"><td>Se queda en Mediolanum (colchón)</td><td>{{ balance.colchon|eur }}</td></tr>
+            <tr class="sub"><td>Huchas (a la {{ huchas.cuenta }}, ver <a href="#huchas">abajo</a>)</td><td>{{ balance.huchas|eur }}</td></tr>
             <tr class="sub">
-              <th>Sin asignar</th>
+              <th>Sobra para ahorrar</th>
               <th class="{{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ balance.sin_asignar|eur }}</th>
             </tr>
           </tbody>
         </table>
         <p class="muted">
           El gasto presupuestado es el {{ balance.ratio_gasto|round|int }}% de lo que cobras.
-          A tus cuentas del día a día llegan unos {{ balance.llega_a_cuentas|eur }}
-          y el plan (con la inversión) saca {{ resumen.total_limite|eur }}.
-          {% if consumo_medio and consumo_medio > balance.fijos + balance.variables %}
-            <strong>Tu gasto real medio de los últimos 6 meses es {{ consumo_medio|eur(0) }} al mes:
-            cumplir este plan supone recortar un
-            {{ ((1 - (balance.fijos + balance.variables) / consumo_medio) * 100)|round|int }} %.</strong>
+          Lo que sobra puede quedarse en Mediolanum: estos meses se han quedado allí unos {{ balance.colchon|eur }}
+          y han pasado a tus cuentas del día a día {{ balance.llega_a_cuentas|eur }}.
+          {% if balance.traspaso_necesario > balance.llega_a_cuentas + 1 %}
+            <strong>Con este plan hace falta pasar {{ balance.traspaso_necesario|eur }} al mes
+            ({{ (balance.traspaso_necesario - balance.llega_a_cuentas)|eur }} más).</strong>
+          {% endif %}
+          {% set plan = balance.fijos + balance.variables + balance.huchas %}
+          {% if consumo_medio and consumo_medio > plan %}
+            <strong>Tu gasto real medio de los últimos 6 meses es {{ consumo_medio|eur(0) }} al mes; el plan,
+            con lo que pagan las huchas, {{ plan|eur(0) }}
+            ({{ ((1 - plan / consumo_medio) * 100)|round|int }} % menos).</strong>
           {% endif %}
           {% if balance.sin_asignar < 0 %}
             <strong class="negative">El plan no cabe: faltan {{ (-balance.sin_asignar)|eur }};
-            saldrían del colchón o de ahorros.</strong>
+            saldrían de ahorros.</strong>
           {% endif %}
           Ingresos previstos: mediana de {{ balance.meses|join(", ") }}, solo los ingresos que entran
           todos los meses con un importe parecido (nómina, alquiler); los Bizum que te devuelven no cuentan.

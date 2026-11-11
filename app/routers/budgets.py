@@ -1,3 +1,4 @@
+import calendar
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import BudgetGroup, Category, GoalType, UserSettings
-from app.services import budget_service, goal_service, libertad_service
+from app.services import budget_service, goal_service, huchas_service, libertad_service
 from app.services.dashboard_service import MONTHS_ES
 from app.templating import templates
 
@@ -36,7 +37,8 @@ def presupuestos_home(
     resumen = budget_service.budget_summary(db, year, month)
     # Sin ningún Budget real (solo la fila virtual de inversión) el balance diría "0 € de gasto".
     tiene_presupuestos = any(f["budget"] is not None for f in resumen["filas"])
-    balance = budget_service.balance_mes(db, year, month, resumen) if tiene_presupuestos else None
+    huchas = huchas_service.huchas(db)
+    balance = budget_service.balance_mes(db, year, month, resumen, huchas["cuota"]) if tiene_presupuestos else None
     hitos = goal_service.goal_rows(db, year, month)
     ajustes = budget_service.ajustes_automaticos(db, year, month)
     gastos_anuales = budget_service.gastos_anuales(db, year)
@@ -60,7 +62,11 @@ def presupuestos_home(
         "budgets.html",
         {
             "resumen": resumen,
+            # Día del mes y días que tiene, si es el mes en curso: para leer "llevas X" a mitad de mes.
+            "progreso_mes": (hoy.day, calendar.monthrange(year, month)[1]) if (year, month) == (hoy.year, hoy.month) else None,
+            "mes_futuro": (year, month) > (hoy.year, hoy.month),
             "balance": balance,
+            "huchas": huchas,
             "consumo_medio": libertad_service.medias_mensuales(db)["consumo"],
             "hitos": hitos,
             "ajustes": ajustes,
@@ -96,6 +102,13 @@ def crear_presupuesto(
 ) -> RedirectResponse:
     """Alta y edición: el upsert por (categoría, año, mes) sirve para las dos cosas."""
     budget_service.upsert_budget(db, category_id, year, month, monthly_limit, fijado=True)
+    return _redirect(year, month)
+
+
+@router.post("/hucha-variable")
+def hucha_variable(year: int = Form(...), month: int = Form(...), cuota: float = Form(...),
+                   db: Session = Depends(get_db)) -> RedirectResponse:
+    huchas_service.fijar_variable(db, max(cuota, 0.0))
     return _redirect(year, month)
 
 

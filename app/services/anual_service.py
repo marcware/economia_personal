@@ -39,6 +39,13 @@ GRUPOS_GASTO = (BudgetGroup.NECESIDAD, BudgetGroup.DESEO, None)
 # pasarse un mes de lo normal en una categoría para contar como gasto gordo.
 MESES_GRANDES = 12
 UMBRAL_PICO = 1000.0  # más bajo, cuenta como "gordo" el simple gastar de más en restaurantes
+# Hucha de imprevistos (ver hucha_imprevistos): las averías son más raras que las
+# vacaciones, así que se mira más atrás; y bastan 150 € sobre lo normal para contar.
+MESES_IMPREVISTOS = 24
+UMBRAL_IMPREVISTO = 150.0
+# Solo categorías de gasto a golpes (casa, taller, electrodomésticos): con un mes normal de
+# más de esto (el súper, la gasolina), un mes alto es gastar más, no una avería.
+MEDIANA_MAX_IMPREVISTO = 50.0
 
 
 def _mes_anterior(year: int, month: int) -> tuple[int, int]:
@@ -243,6 +250,55 @@ def hucha_grandes(db: Session, hoy: date | None = None) -> dict:
     return {
         "picos": picos, "total": total, "aportacion": total / MESES_GRANDES,
         "meses": MESES_GRANDES, "umbral": UMBRAL_PICO,
+    }
+
+
+def hucha_imprevistos(db: Session, hoy: date | None = None) -> dict:
+    """Cuánto apartar al mes para lo que no se elige ni se ve venir: la avería de casa, el
+    taller, un electrodoméstico, el dentista.
+
+    El mismo método que hucha_grandes, en las categorías NECESIDAD variables de gasto a
+    golpes (mediana ≤ MEDIANA_MAX_IMPREVISTO): un mes es un imprevisto si gasta al menos
+    UMBRAL_IMPREVISTO por encima de su mediana. Pasan menos a
+    menudo que las vacaciones, así que se miran MESES_IMPREVISTOS meses cerrados. `mayor`
+    es el imprevisto más caro visto: lo que conviene tener ya en la hucha para que el
+    próximo no pille a cero.
+    """
+    hoy = hoy or date.today()
+    categorias = load_categories(db)
+    df = load_transactions_df(db)
+    gasto = _gasto_por_mes(df) if not df.empty else {}
+    # Solo meses con datos: con poco histórico, los meses de antes (a cero) bajarían la
+    # mediana y cualquier gasto normal parecería una avería.
+    primero = (df["date"].min().year, df["date"].min().month) if not df.empty else (hoy.year, hoy.month)
+    meses = [ym for ym in _meses_cerrados(hoy, MESES_IMPREVISTOS) if ym >= primero]
+    if not meses:
+        return {"picos": [], "total": 0.0, "aportacion": 0.0, "mayor": 0.0,
+                "meses": MESES_IMPREVISTOS, "umbral": UMBRAL_IMPREVISTO}
+
+    picos = []
+    for cat in categorias.values():
+        if cat.parent_id is None or cat.budget_group != BudgetGroup.NECESIDAD or cat.recurrente or cat.anual:
+            continue
+        por_mes = gasto.get(cat.id, {})
+        mediana = statistics.median(por_mes.get(ym, 0.0) for ym in meses)
+        if mediana > MEDIANA_MAX_IMPREVISTO:
+            continue
+        for ym in meses:
+            exceso = por_mes.get(ym, 0.0) - mediana
+            if exceso >= UMBRAL_IMPREVISTO:
+                picos.append({
+                    "etiqueta": category_label(cat.id, categorias),
+                    "nombre": f"{MONTHS_ES[ym[1]]} {ym[0]}",
+                    "ym": ym,
+                    "importe": exceso,
+                })
+    picos.sort(key=lambda p: -p["importe"])
+    total = sum(p["importe"] for p in picos)
+    return {
+        "picos": picos, "total": total, "aportacion": total / len(meses),
+        "mayor": picos[0]["importe"] if picos else 0.0,
+        "meses": MESES_IMPREVISTOS, "umbral": UMBRAL_IMPREVISTO,
     }
 
 

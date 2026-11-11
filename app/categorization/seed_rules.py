@@ -58,6 +58,11 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Otros gastos", "Gasto Bizum", BudgetGroup.DESEO, False, False, False),
     ("Otros gastos", "Otros préstamos y avales", BudgetGroup.NECESIDAD, False, True, False),
     ("Otros gastos", "Pago de impuestos", BudgetGroup.NECESIDAD, False, True, True),
+    # Recibos anuales de SUMA con categoría propia, para verlos en /anual y en la hucha de
+    # recibos (sus reglas van por importe; ver la migración c4e8a2f6b913).
+    ("Otros gastos", "IBI Palacete", BudgetGroup.NECESIDAD, False, True, True),
+    ("Otros gastos", "IBI cochera", BudgetGroup.NECESIDAD, False, True, True),
+    ("Otros gastos", "Impuesto del coche", BudgetGroup.NECESIDAD, False, True, True),
     ("Otros gastos", "Seguros", BudgetGroup.NECESIDAD, False, True, True),
     ("Otros gastos", "Suscripciones", BudgetGroup.DESEO, False, True, False),
     ("Otros gastos", "Transferencias", None, False, False, False),
@@ -68,6 +73,7 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Otros ingresos", "Alquiler cobrado", BudgetGroup.INGRESO, False, False, False),
     ("Vehículo y transporte", "Gasolina y combustible", BudgetGroup.NECESIDAD, False, False, False),
     ("Vehículo y transporte", "Mantenimiento del vehículo", BudgetGroup.NECESIDAD, False, False, False),
+    ("Vehículo y transporte", "Revisión del coche", BudgetGroup.NECESIDAD, False, True, True),
 ]
 
 # (patrón, es_regex, amount_sign, categoría, subcategoría, prioridad)
