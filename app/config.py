@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     enablebanking_api_base: str = "https://api.enablebanking.com"
     enablebanking_redirect_url: str = "https://localhost:8000/conexiones/callback"
 
+    bit2me_api_key: str | None = None
+    bit2me_api_secret: str | None = None
+    bit2me_api_base: str = "https://gateway.bit2me.com"
+
     @model_validator(mode="after")
     def _resolve_relative_paths(self) -> "Settings":
         if self.enablebanking_private_key_path and not self.enablebanking_private_key_path.is_absolute():

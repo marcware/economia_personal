@@ -156,9 +156,9 @@ RULES: list[tuple[str, bool, str, str]] = [
     # --- Farmacia / salud ---
     ("FCIA ", False, "Educación y salud", "Farmacia, herbolario y nutrición"),
     # --- Inversión / crypto ---
-    ("BIT2ME", False, "Inversión", "Otras inversiones"),
-    ("BITCOINFORME", False, "Inversión", "Otras inversiones"),
-    (r"PRIMA (MAYO|FEBR|AGOST)\.? +PIAS", True, "Inversión", "Otras inversiones"),
+    ("BIT2ME", False, "Inversión", "Bit2Me"),
+    ("BITCOINFORME", False, "Inversión", "Bit2Me"),
+    (r"PRIMA (MAYO|FEBR|AGOST)\.? +PIAS", True, "Inversión", "PIAS Mediolanum"),
     # --- Préstamos / deudas ---
     ("AMORTIZACION PARCIAL DE PRESTAMO", False, "Otros gastos", "Otros préstamos y avales"),
     ("AMORTIZACION TOTAL DE PRESTAMO", False, "Otros gastos", "Otros préstamos y avales"),
@@ -205,7 +205,7 @@ AMOUNT_RULES: list[tuple[str, float, str, str]] = [
     # ambos ininterrumpidos en todo el histórico. El -50€ de la misma descripción (7 pagos,
     # ene-jul 2025, ya cerrado) se deja sin decidir — no hay con qué contrastarlo.
     ("TRANSFERENCIA EMITIDA PERIODICA", -30.0, "Otros gastos", "Pago de impuestos"),
-    ("TRANSFERENCIA EMITIDA PERIODICA", -25.0, "Inversión", "Otras inversiones"),
+    ("TRANSFERENCIA EMITIDA PERIODICA", -25.0, "Inversión", "Bit2Me"),
 ]
 
 

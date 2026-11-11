@@ -26,6 +26,24 @@
         {% endif %}
       {% endfor %}
     {% endif %}
+    {% if bit2me and bit2me.error %}
+      <p class="advice advice-danger">Bit2Me: error — {{ bit2me.error }}</p>
+    {% elif bit2me %}
+      <p class="advice advice-info">Bit2Me: {{ bit2me.total|eur }} en {{ bit2me.monedas }} moneda{{ "s" if bit2me.monedas != 1 }}
+        (<a href="/inversiones/bit2me">ver Bit2Me</a>).</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Bit2Me (cripto)</h2>
+    {% if bit2me_api %}
+      <p>Conectado por API de solo lectura.
+        {% if bit2me_ultima %}Última foto: {{ bit2me_ultima.strftime('%d/%m/%Y %H:%M') }} (UTC).{% endif %}
+        "Sincronizar ahora" también lo actualiza.</p>
+    {% else %}
+      <p class="muted">Sin conectar: faltan <code>BIT2ME_API_KEY</code> y <code>BIT2ME_API_SECRET</code> en <code>.env</code>
+        (instrucciones en <a href="/inversiones">Inversiones</a>).</p>
+    {% endif %}
   </section>
 
   <section>

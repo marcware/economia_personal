@@ -12,6 +12,7 @@ from app.routers import (
     categories,
     connections,
     dashboard,
+    inversiones,
     net_worth,
     notes,
     transactions,
@@ -36,6 +37,7 @@ app.include_router(transfer_candidates.router)
 app.include_router(budgets.router)
 app.include_router(categories.router)
 app.include_router(net_worth.router)
+app.include_router(inversiones.router)
 app.include_router(anual.router)
 
 

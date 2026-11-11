@@ -16,8 +16,14 @@
       <div class="card-value positive">{{ summary.total_accounts|eur }}</div>
     </div>
     <div class="card">
-      <div class="card-label">Inversiones declaradas</div>
-      <div class="card-value positive">{{ summary.total_assets|eur }}</div>
+      <div class="card-label">Inversiones</div>
+      <div class="card-value positive">{{ total_inversiones|eur }}</div>
+      <div class="card-sub"><a href="/inversiones">ver la cartera</a></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Otros activos</div>
+      <div class="card-value positive">{{ total_otros|eur }}</div>
+      <div class="card-sub">cuentas de ahorro, colchón</div>
     </div>
     <div class="card">
       <div class="card-label">Deudas pendientes</div>
@@ -44,12 +50,13 @@
   </section>
 
   <section>
-    <h2>Inversiones declaradas</h2>
-    <p class="muted">Lo que no llega por el banco. Cambia el valor en la propia fila para actualizarlo; el histórico se conserva.</p>
+    <h2>Otros activos declarados</h2>
+    <p class="muted">Lo que no llega por el banco y no es una inversión (esas se apuntan en
+       <a href="/inversiones">Inversiones</a>). Cambia el valor en la propia fila para actualizarlo; el histórico se conserva.</p>
     <table>
       <thead><tr><th>Nombre</th><th class="num">Valor</th><th class="num">Actualizado</th></tr></thead>
       <tbody>
-        {% for a in summary.assets %}
+        {% for a in otros_activos %}
           <tr>
             <td>{{ a.name }}{% if a.liquido %} <span class="tag">líquido</span>{% endif %}</td>
             <td class="num">
@@ -66,9 +73,9 @@
       </tbody>
     </table>
     <details class="añadir">
-    <summary>Añadir una inversión</summary>
-    <form method="post" action="/patrimonio/activo" class="inline-form" data-aviso="Inversión añadida">
-      <input type="text" name="name" placeholder="Nombre (p.ej. PIAS, Fondos, BIT2ME)" required>
+    <summary>Añadir un activo</summary>
+    <form method="post" action="/patrimonio/activo" class="inline-form" data-aviso="Activo añadido">
+      <input type="text" name="name" placeholder="Nombre (p.ej. Cuenta de ahorro)" required>
       <input type="number" step="0.01" name="value" placeholder="Valor actual (€)" required>
       <label class="checkbox-label"><input type="checkbox" name="liquido" value="true">
         Líquido (colchón: se puede sacar en días sin perder dinero)</label>

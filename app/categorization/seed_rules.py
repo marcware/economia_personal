@@ -35,7 +35,13 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     ("Hogar", "Mascotas", BudgetGroup.NECESIDAD, False, False, False),  # el gato
     ("Hogar", "Muebles y decoración", BudgetGroup.DESEO, False, False, False),
     ("Hogar", "Teléfono, TV e internet", BudgetGroup.NECESIDAD, False, True, False),
+    # Una subcategoría por inversión: /inversiones saca de aquí lo aportado a cada una.
+    ("Inversión", "Bit2Me", BudgetGroup.AHORRO, False, True, False),
     ("Inversión", "Otras inversiones", BudgetGroup.AHORRO, False, True, False),
+    ("Inversión", "PIAS Mediolanum", BudgetGroup.AHORRO, False, True, False),
+    ("Inversión", "Plan de pensiones ING", BudgetGroup.AHORRO, False, True, False),
+    ("Inversión", "Quanloop", BudgetGroup.AHORRO, False, True, False),
+    ("Inversión", "Trade Republic", BudgetGroup.AHORRO, False, True, False),  # compra periódica de oro
     ("Movimientos excluidos", "Traspaso entre cuentas", BudgetGroup.EXCLUIDO, True, False, False),
     # Botes, regalos en grupo y recibos del piso alquilado que devuelve la inquilina: lo que
     # pagas por otros y te devuelven no es ni ingreso ni gasto tuyo.
@@ -131,9 +137,13 @@ SEED_RULES: list[tuple[str, bool, AmountSign, str, str, int]] = [
     ("LOWNET", False, AmountSign.ANY, "Hogar", "Teléfono, TV e internet", 130),
     ("PALAGYM", False, AmountSign.ANY, "Educación y salud", "Deporte y gimnasio", 130),
     # Inversión
-    ("FONDOS-PLANES", False, AmountSign.ANY, "Inversión", "Otras inversiones", 130),
-    ("QUANLOOP", False, AmountSign.ANY, "Inversión", "Otras inversiones", 130),
-    ("TRADE REPUBLIC", False, AmountSign.ANY, "Inversión", "Otras inversiones", 130),  # compra periódica de oro
+    ("FONDOS-PLANES", False, AmountSign.ANY, "Inversión", "Plan de pensiones ING", 130),
+    ("QUANLOOP", False, AmountSign.ANY, "Inversión", "Quanloop", 130),
+    ("TRADE REPUBLIC", False, AmountSign.ANY, "Inversión", "Trade Republic", 130),
+    ("TRBKESM2", False, AmountSign.ANY, "Inversión", "Trade Republic", 130),  # BIC de Trade Republic
+    ("BIT2ME", False, AmountSign.ANY, "Inversión", "Bit2Me", 130),
+    ("BITCOINFORME", False, AmountSign.ANY, "Inversión", "Bit2Me", 130),  # razón social de Bit2Me
+    ("PIAS-", False, AmountSign.NEGATIVE, "Inversión", "PIAS Mediolanum", 130),
     # Suscripciones de software/streaming adicionales
     ("OPENAI", False, AmountSign.ANY, "Otros gastos", "Suscripciones", 130),
     ("MEETIC", False, AmountSign.ANY, "Otros gastos", "Suscripciones", 130),

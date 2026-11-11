@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ManualAssetEntry, ManualLiabilityEntry
-from app.services import libertad_service
+from app.services import inversiones_service, libertad_service
 from app.services.net_worth_service import net_worth_summary
 from app.templating import templates
 
@@ -15,8 +15,15 @@ router = APIRouter(prefix="/patrimonio", tags=["patrimonio"])
 def patrimonio_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     summary = net_worth_summary(db)
     libertad = libertad_service.resumen(db)
+    # Las inversiones se apuntan en /inversiones; aquí solo su total y el resto de activos.
+    nombres = inversiones_service.nombres(db)
+    inversiones = [a for a in summary["assets"] if a["name"] in nombres]
+    otros = [a for a in summary["assets"] if a["name"] not in nombres]
     return templates.TemplateResponse(
-        request, "net_worth.html", {"summary": summary, "libertad": libertad}
+        request, "net_worth.html",
+        {"summary": summary, "libertad": libertad, "otros_activos": otros,
+         "total_inversiones": sum(a["value"] for a in inversiones),
+         "total_otros": sum(a["value"] for a in otros)},
     )
 
 

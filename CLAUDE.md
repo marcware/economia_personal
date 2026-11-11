@@ -73,14 +73,31 @@ and the script saves it to `data/mediolanum/` and imports it. Never store the ba
 Enable Banking connector ever works, the callback links the session to the existing manual Mediolanum
 account and `sync_account` skips movements already imported by hand (same day and amount).
 
-Bit2Me (crypto) and Quanloop (P2P lending) aren't transactional accounts in this app at all — they're
-tracked as net-worth snapshots via `/patrimonio`'s "Inversiones declaradas" form
-(`ManualAssetEntry`, [app/services/net_worth_service.py](app/services/net_worth_service.py)): the user
-reports a value periodically (by hand, or by pasting a report he sends) and it's stored as one more
-row — the table is append-only, so full history survives even though the net-worth summary shows only
-the latest per name. Bit2Me has a public API; if the user ever provides credentials, a live balance sync
-is a reasonable follow-up, but don't build against it speculatively without real credentials to test
-against.
+Investments (Bit2Me crypto, Trade Republic gold, Quanloop P2P, the ING pension plan, the Mediolanum
+PIAS) are kept **independent of the bank movements**: each is an `Inversion` row
+([app/models/inversion.py](app/models/inversion.py)) with its own `Aportacion` ledger (money in/out from
+outside the platform, from its API or entered by hand) and its value as the latest `ManualAssetEntry`
+whose `name` equals `Inversion.nombre` — so `/patrimonio` sums it with no special case and lists only the
+remaining (non-investment) declared assets. `/inversiones`
+([inversiones_service.py](app/services/inversiones_service.py)) is the overview; each platform gets its
+own module page, built one at a time (so far only `/inversiones/bit2me`; the rest show "módulo
+pendiente"). `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
+kept only for a later step that compares the platform's own figures with the bank transfers — don't
+compute anything in the investment pages from `Transaction`.
+
+Bit2Me ([app/integrations/bit2me/](app/integrations/bit2me/), read-only key in `.env` as
+`BIT2ME_API_KEY`/`BIT2ME_API_SECRET`): requests are signed `base64(HMAC-SHA512(secret,
+SHA256("nonce:path")))`, the same scheme as the official `bit2me-devs/bit2me-mcp`; prices come from the
+public `/v3/currency/ticker`. [cartera.py](app/integrations/bit2me/cartera.py) rebuilds the portfolio
+from Bit2Me's own history (`/v2/wallet/transaction` + Pro trades from `/v1/trading/trade`, which the
+wallet history doesn't show): external deposits/withdrawals (origin/destination class card or
+bank-transfer) are the aportaciones; per coin, FIFO cost of what's left, realized result of past sells,
+and Earn rewards at zero cost; wallet ↔ Earn ↔ Pro moves are internal. `latente + realizado − comisiones
+= valor − aportado` holds exactly (checked against the real account). `sync_service.sincronizar` stores
+new aportaciones (deduplicated by Bit2Me operation id), a `CriptoPosicion` snapshot per coin and a
+`ManualAssetEntry("Bit2Me")` total; it runs from "Sincronizar ahora" on `/conexiones`,
+`scripts/sync_accounts.py`, and on opening `/inversiones` or `/inversiones/bit2me` when the last snapshot
+is older than `HORAS_FOTO`.
 
 ## Architecture
 
@@ -90,7 +107,7 @@ Layout is a standard layered FastAPI app under `app/`:
   re-exports everything and is imported by `migrations/env.py` so autogenerate picks up all tables —
   add new models there too.
 - **routers/** — one `APIRouter` per feature area (dashboard, transactions, budgets, categories,
-  connections, advice, notes, net_worth, transfer_candidates, anual), each mounted in [app/main.py](app/main.py).
+  connections, advice, notes, net_worth, inversiones, transfer_candidates, anual), each mounted in [app/main.py](app/main.py).
   Routers call into `services/`/`advisor/`/`categorization/` and render Jinja2 templates from
   `app/templates/` via the shared `templates` instance in [app/templating.py](app/templating.py)
   (which also injects template globals, e.g. the pending-transfer-candidates nav badge).

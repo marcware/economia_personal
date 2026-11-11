@@ -239,7 +239,7 @@ def _fila_inversion(db: Session, year: int, month: int, month_df: pd.DataFrame |
     return {
         "budget": None,
         "categoria": None,
-        "etiqueta": "Inversión · Otras inversiones",
+        "etiqueta": "Inversión",
         "recurrente": True,
         "virtual": True,
         "media": 0.0,

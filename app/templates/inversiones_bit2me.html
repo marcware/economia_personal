@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Bit2Me · Inversiones{% endblock %}
+{% block content %}
+  <p class="muted"><a href="/inversiones">← Inversiones</a></p>
+  <h1>Bit2Me</h1>
+
+  {% if resultado and resultado.error %}
+    <p class="advice advice-danger">No se ha podido leer Bit2Me: {{ resultado.error }}</p>
+  {% elif resultado %}
+    <p class="advice advice-info">Bit2Me actualizado: {{ resultado.total|eur }}
+      {% if resultado.aportaciones_nuevas %}· {{ resultado.aportaciones_nuevas }} aportación{{ "es" if resultado.aportaciones_nuevas != 1 }} nueva{{ "s" if resultado.aportaciones_nuevas != 1 }}{% endif %}.</p>
+  {% endif %}
+  {% if resultado and resultado.avisos %}
+    <p class="advice advice-warning">{{ resultado.avisos|join(" · ") }}</p>
+  {% endif %}
+
+  {% if not api %}
+    <section>
+      <p>Para conectar Bit2Me crea una API key de <strong>solo lectura</strong> en Bit2Me (Ajustes → API;
+         solo permisos de consulta, nunca de operar ni retirar) y añade a <code>.env</code>
+         <code>BIT2ME_API_KEY</code> y <code>BIT2ME_API_SECRET</code>. Reinicia el servidor después.</p>
+    </section>
+  {% else %}
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Has metido</div>
+      <div class="card-value">{{ m.aportado|eur }}</div>
+      <div class="card-sub">{{ m.aportaciones|length }} ingresos con tarjeta o transferencia{% if m.aportaciones %}, desde {{ m.aportaciones[-1].fecha.strftime('%m/%Y') }}{% endif %}</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">Vale hoy</div>
+      <div class="card-value">{{ m.valor|eur }}</div>
+      <div class="card-sub">{% if m.ultima %}a {{ m.ultima.strftime('%d/%m/%Y %H:%M') }} (UTC){% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ 'Ganas' if m.ganancia >= 0 else 'Pierdes' }}</div>
+      <div class="card-value {{ 'positive' if m.ganancia >= 0 else 'negative' }}">{{ m.ganancia|eur }}</div>
+      <div class="card-sub">{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo metido{% endif %}</div>
+    </div>
+    {% if m.euros %}
+    <div class="card">
+      <div class="card-label">Euros sin invertir</div>
+      <div class="card-value">{{ m.euros.valor|eur }}</div>
+      <div class="card-sub">saldo en euros dentro de Bit2Me</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <section>
+    <h2>Tus criptos</h2>
+    <p class="muted">Coste = lo que pagaste por lo que te queda (las compras más antiguas se dan por vendidas
+       primero, como lo calcula Hacienda). Lo que ha dado Earn cuenta a coste cero.</p>
+    <table>
+      <thead><tr><th>Moneda</th><th class="num">Cantidad</th><th class="num">Precio hoy</th><th class="num">Compraste a</th>
+        <th class="num">Coste</th><th class="num">Valor</th><th class="num">Ganancia</th><th class="num">Peso</th></tr></thead>
+      <tbody>
+        {% for c in m.monedas %}
+          <tr>
+            <td><strong>{{ c.symbol }}</strong>
+              {% if c.recompensas > 0 %}<span class="nota">{{ c.recompensas|numero(8 if c.recompensas < 1 else 2) }} de Earn</span>{% endif %}</td>
+            <td class="num">{{ c.cantidad|numero(8 if c.cantidad < 1 else 4) }}</td>
+            <td class="num">{{ c.precio|eur(2 if c.precio >= 1 else 6) }}</td>
+            <td class="num">{% if c.precio_medio %}{{ c.precio_medio|eur(2 if c.precio_medio >= 1 else 6) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{{ c.coste|eur }}</td>
+            <td class="num">{{ c.valor|eur }}</td>
+            <td class="num"><span class="{{ 'positive' if c.latente >= 0 else 'negative' }}">{{ c.latente|eur }}</span>
+              {% if c.latente_pct is not none %}<span class="nota">{{ c.latente_pct|numero(1) }} %</span>{% endif %}</td>
+            <td class="num">{{ c.peso|numero(0) }} %</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>De dónde sale el resultado</h2>
+    <table>
+      <tbody>
+        <tr><td>Las criptos que tienes ahora</td>
+          <td class="num {{ 'positive' if m.latente >= 0 else 'negative' }}">{{ m.latente|eur }}</td></tr>
+        <tr><td>Ventas ya hechas
+            <span class="nota">{% for c in m.monedas if c.realizado %}{{ c.symbol }} {{ c.realizado|eur }}{{ " · " if not loop.last }}{% endfor %}</span></td>
+          <td class="num {{ 'positive' if m.realizado >= 0 else 'negative' }}">{{ m.realizado|eur }}</td></tr>
+        <tr><td>Comisiones <span class="nota">recargas con tarjeta y las cobradas en la propia cripto</span></td>
+          <td class="num negative">{{ (-m.comisiones)|eur }}</td></tr>
+        <tr><td><strong>Total</strong></td>
+          <td class="num {{ 'positive' if m.ganancia >= 0 else 'negative' }}"><strong>{{ m.ganancia|eur }}</strong></td></tr>
+      </tbody>
+    </table>
+    <form method="post" action="/inversiones/bit2me/sincronizar" data-aviso="Bit2Me actualizado" data-enviando="Consultando Bit2Me…">
+      <button type="submit" class="button-sm button-secondary">Actualizar ahora</button>
+      <span class="muted">Se actualiza solo al abrir Inversiones si han pasado unas horas, y al sincronizar en <a href="/conexiones">Conexiones</a>.</span>
+    </form>
+  </section>
+
+  {% if m.evolucion|length >= 2 %}
+    <div class="chart-box">
+      <h3>Valor frente a lo metido</h3>
+      <div class="chart-area"><canvas id="chartBit2me"></canvas></div>
+    </div>
+    <script src="/static/js/chart.min.js?v={{ version_estaticos() }}"></script>
+    <script src="/static/js/charts.js?v={{ version_estaticos() }}"></script>
+    <script>
+      const evolucion = {{ m.evolucion | tojson }};
+      new Chart(document.getElementById('chartBit2me'), {
+        type: 'line',
+        data: {
+          labels: evolucion.map(p => p.fecha.split('-').reverse().join('/')),
+          datasets: [
+            { label: 'Valor', data: evolucion.map(p => p.valor), borderColor: tema.ingresos, backgroundColor: tema.ingresos, tension: 0.2 },
+            { label: 'Metido', data: evolucion.map(p => p.aportado), borderColor: tema.neutro, backgroundColor: tema.neutro, borderDash: [4, 4], stepped: true },
+          ],
+        },
+        options: { pointRadius: 2, scales: { y: { ticks: { callback: v => tema.eur(v) } } } },
+      });
+    </script>
+  {% endif %}
+
+  <section class="plegable">
+    <details>
+    <summary><h2>Dinero metido</h2><span class="resumen">{{ m.aportaciones|length }} ingresos · {{ m.aportado|eur }}</span></summary>
+    <p class="muted">Según el propio Bit2Me: cada recarga con tarjeta o transferencia. Comprar una cripto con el
+       saldo en euros o pasarla a Earn o a Pro no es dinero nuevo y no sale aquí.</p>
+    <table>
+      <thead><tr><th>Fecha</th><th class="num">Importe</th></tr></thead>
+      <tbody>
+        {% for a in m.aportaciones %}
+          <tr><td>{{ a.fecha.strftime('%d/%m/%Y') }}</td>
+            <td class="num {{ 'negative' if a.importe < 0 }}">{{ a.importe|float|eur }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </details>
+  </section>
+  {% endif %}
+{% endblock %}

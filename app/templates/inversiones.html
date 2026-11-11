@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Inversiones{% endblock %}
+{% block content %}
+  {% set c = cartera %}
+  <h1>Inversiones</h1>
+
+  <div class="cards">
+    <div class="card card-hero">
+      <div class="card-label">Valor actual</div>
+      <div class="card-value">{{ c.total_valor|eur }}</div>
+      <div class="card-sub">suma de todas las inversiones</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Ganancia</div>
+      <div class="card-value {{ 'positive' if c.ganancia >= 0 else 'negative' }}">{{ c.ganancia|eur }}</div>
+      <div class="card-sub">{% if c.rentabilidad is not none %}{{ c.rentabilidad|numero(1) }} % sobre {{ c.aportado_completas|eur(0) }} aportados{% endif %}
+        {% if c.incompletas %}· solo las que tienen aportado y valor{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Aportas al mes</div>
+      <div class="card-value">{{ c.ritmo_mensual|eur(0) }}</div>
+      <div class="card-sub">media de los últimos {{ c.meses_ritmo }} meses cerrados</div>
+    </div>
+  </div>
+
+  {% if bit2me_error %}
+    <p class="advice advice-danger">No se ha podido leer Bit2Me: {{ bit2me_error }}</p>
+  {% endif %}
+
+  <section>
+    <h2>Cartera</h2>
+    <p class="muted">Cada inversión con sus propios datos, no con los movimientos del banco. Las que tienen
+       módulo se actualizan solas; en las demás apunta el valor en la propia fila cuando lo consultes
+       (el histórico se conserva). Todo suma en <a href="/patrimonio">Patrimonio</a>.</p>
+    <table>
+      <thead><tr><th>Inversión</th><th class="num">Aportado</th><th class="num">Valor</th>
+        <th class="num">Ganancia</th><th class="num">Peso</th></tr></thead>
+      <tbody>
+        {% for f in c.filas %}
+          <tr>
+            <td>{% if f.modulo %}<a href="{{ f.modulo }}">{{ f.nombre }}</a>{% else %}{{ f.nombre }}{% endif %}
+              <span class="nota">{% if f.modulo %}por API{% else %}módulo pendiente{% endif %}
+                {% if f.desde %} · desde {{ f.desde.strftime('%m/%Y') }}{% endif %}
+                {% if f.ritmo_mensual > 0 %} · {{ f.ritmo_mensual|eur(0) }}/mes{% endif %}</span></td>
+            <td class="num">{% if f.aportado is not none %}{{ f.aportado|eur }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">
+              {% if f.modulo %}
+                {% if f.valor is not none %}{{ f.valor|eur }}{% else %}<span class="muted">—</span>{% endif %}
+                {% if f.valor_fecha %}<span class="nota">{{ f.valor_fecha.strftime('%d/%m %H:%M') }}</span>{% endif %}
+              {% else %}
+                <form method="post" action="/inversiones/valor" class="inline-form solo-si-cambia editar-valor" data-aviso="Valor actualizado">
+                  <input type="hidden" name="name" value="{{ f.nombre }}">
+                  <button type="submit" class="button-sm">Guardar</button>
+                  <input type="number" step="0.01" name="value" value="{{ '%.2f'|format(f.valor) if f.valor is not none }}"
+                         placeholder="—" required aria-label="Valor de {{ f.nombre }}"> €
+                </form>
+                {% if f.valor_fecha %}<span class="nota">al {{ f.valor_fecha.strftime('%d/%m/%Y') }}</span>{% endif %}
+              {% endif %}
+            </td>
+            <td class="num">
+              {% if f.ganancia is not none %}
+                <span class="{{ 'positive' if f.ganancia >= 0 else 'negative' }}">{{ f.ganancia|eur }}</span>
+                {% if f.rentabilidad is not none %}<span class="nota">{{ f.rentabilidad|numero(1) }} %</span>{% endif %}
+              {% else %}<span class="muted">—</span>{% endif %}
+            </td>
+            <td class="num">{% if f.peso is not none %}{{ f.peso|numero(0) }} %{% else %}<span class="muted">—</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}
