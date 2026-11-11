@@ -118,3 +118,15 @@ def test_quanloop_ingresos_intereses_y_planes():
     assert r["cobrado"] == 23.97 and not r["avisos"]
     valores = {p["symbol"]: p["valor"] for p in r["posiciones"]}
     assert valores == {"LOW": 870.0, "MEDIUM": 290.0, "EUR": 0.7, "PENDIENTE": 12.49}
+
+
+def test_tir_anual():
+    from datetime import date
+
+    from app.services.inversiones_service import tir
+
+    hoy = date(2026, 1, 1)
+    assert round(tir([(date(2024, 1, 1), 100.0)], 121.0, hoy), 1) == 10.0  # 10 % dos años seguidos
+    # Lo metido hace poco pesa menos: mismo +10 € de ganancia, pero la mitad entró hace un año.
+    assert tir([(date(2024, 1, 1), 50.0), (date(2025, 1, 1), 50.0)], 110.0, hoy) > 5.0
+    assert tir([(date(2025, 11, 1), 100.0)], 99.0, hoy) is None  # menos de un año: no se anualiza

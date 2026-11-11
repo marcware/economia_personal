@@ -25,7 +25,7 @@
     <div class="card">
       <div class="card-label">{{ 'Ganas' if m.ganancia >= 0 else 'Pierdes' }}</div>
       <div class="card-value {{ 'positive' if m.ganancia >= 0 else 'negative' }}">{{ m.ganancia|eur }}</div>
-      <div class="card-sub">{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo metido{% endif %}</div>
+      <div class="card-sub">{% if m.tir is not none %}<strong>{{ m.tir|numero(1) }} % al año</strong> · {% endif %}{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo metido{% endif %}</div>
     </div>
     <div class="card">
       <div class="card-label">Gastos de administración</div>

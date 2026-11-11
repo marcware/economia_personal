@@ -16,6 +16,9 @@ from app.models import Aportacion, Posicion, Inversion, ManualAssetEntry
 from app.services.net_worth_service import latest_manual_assets
 
 MESES_RITMO = 12  # para "aportas X €/mes"
+# Con menos de un año, anualizar exagera cualquier vaivén (un −0,5 % en tres semanas sale a
+# −7 % anual): por debajo no se da TIR.
+DIAS_MIN_TIR = 365
 MODULOS = {
     "bit2me": "/inversiones/bit2me",
     "traderepublic": "/inversiones/trade-republic",
@@ -54,6 +57,36 @@ def _hace_meses(hoy: date, meses: int) -> date:
     return date(año, mes + 1, 1)
 
 
+def tir(flujos: list[tuple[date, float]], valor: float, hoy: date) -> float | None:
+    """Rentabilidad anual (TIR, en %) de unas aportaciones (fecha, importe; las retiradas en
+    negativo) que hoy valen `valor`. Tiene en cuenta cuándo entró cada euro: no es lo mismo
+    ganar un 13 % en seis años que en uno. None si la primera aportación tiene menos de
+    DIAS_MIN_TIR días o no hay solución."""
+    if not flujos or valor is None or (hoy - min(f for f, _ in flujos)).days < DIAS_MIN_TIR:
+        return None
+
+    def vf(tasa: float) -> float:  # lo aportado llevado a hoy a esa tasa, menos lo que vale
+        return sum(i * (1 + tasa) ** ((hoy - f).days / 365.25) for f, i in flujos) - valor
+
+    bajo, alto = -0.99, 10.0
+    if vf(bajo) * vf(alto) > 0:
+        return None
+    for _ in range(200):  # bisección: vf crece con la tasa mientras se haya aportado neto
+        medio = (bajo + alto) / 2
+        if (vf(medio) > 0) == (vf(alto) > 0):
+            alto = medio
+        else:
+            bajo = medio
+    return (bajo + alto) / 2 * 100
+
+
+def _flujos(db: Session) -> dict[int, list[tuple[date, float]]]:
+    por_inversion: dict[int, list[tuple[date, float]]] = {}
+    for iid, fecha, importe in db.query(Aportacion.inversion_id, Aportacion.fecha, Aportacion.importe):
+        por_inversion.setdefault(iid, []).append((fecha, float(importe)))
+    return por_inversion
+
+
 def cartera(db: Session, hoy: date | None = None) -> dict:
     hoy = hoy or date.today()
     invs = inversiones(db)
@@ -69,6 +102,7 @@ def cartera(db: Session, hoy: date | None = None) -> dict:
         .group_by(Aportacion.inversion_id)
     )
     valores = {a["name"]: a for a in latest_manual_assets(db)}
+    flujos = _flujos(db)
 
     filas = []
     for inv in invs:
@@ -87,11 +121,13 @@ def cartera(db: Session, hoy: date | None = None) -> dict:
             "valor_fecha": valor["recorded_at"] if valor else None,
             "ganancia": None,
             "rentabilidad": None,
+            "tir": None,
             "peso": None,
         }
         if valor is not None and aportado is not None:
             fila["ganancia"] = valor["value"] - aportado
             fila["rentabilidad"] = fila["ganancia"] / aportado * 100 if aportado > 0 else None
+            fila["tir"] = tir(flujos.get(inv.id, []), valor["value"], hoy)
         filas.append(fila)
 
     total_valor = sum(f["valor"] for f in filas if f["valor"] is not None)
@@ -109,6 +145,7 @@ def cartera(db: Session, hoy: date | None = None) -> dict:
         "aportado_completas": aportado_completas,
         "ganancia": ganancia,
         "rentabilidad": ganancia / aportado_completas * 100 if aportado_completas > 0 else None,
+        "tir": tir([f for c in completas for f in flujos.get(c["id"], [])], sum(c["valor"] for c in completas), hoy),
         "ritmo_mensual": sum(f["ritmo_mensual"] for f in filas),
         "incompletas": [f["nombre"] for f in filas if f["ganancia"] is None],
         "meses_ritmo": MESES_RITMO,
@@ -174,6 +211,7 @@ def modulo(db: Session, inv: Inversion) -> dict:
         "valor": valor,
         "ganancia": ganancia,
         "rentabilidad": ganancia / aportado * 100 if aportado > 0 else None,
+        "tir": tir([(a.fecha, float(a.importe)) for a in aportaciones], valor, date.today()) if filas else None,
         "monedas": monedas,
         "euros": euros,
         "latente": latente,
