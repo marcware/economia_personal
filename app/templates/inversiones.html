@@ -39,7 +39,7 @@
         {% for f in c.filas %}
           <tr>
             <td>{% if f.modulo %}<a href="{{ f.modulo }}">{{ f.nombre }}</a>{% else %}{{ f.nombre }}{% endif %}
-              <span class="nota">{% if f.modulo %}por API{% else %}módulo pendiente{% endif %}
+              <span class="nota">{{ f.origen }}
                 {% if f.desde %} · desde {{ f.desde.strftime('%m/%Y') }}{% endif %}
                 {% if f.ritmo_mensual > 0 %} · {{ f.ritmo_mensual|eur(0) }}/mes{% endif %}</span></td>
             <td class="num">{% if f.aportado is not none %}{{ f.aportado|eur }}{% else %}<span class="muted">—</span>{% endif %}</td>

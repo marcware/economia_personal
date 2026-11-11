@@ -7,11 +7,14 @@ contraseña nunca se guarda y el banco pide confirmar en la app. Por ahora tambi
 descarga: ve a Movimientos, pide el extracto en Excel y el script lo recoge, lo guarda en
 data/mediolanum/ y lo pasa a scripts/import_mediolanum.py (idempotente).
 
-Cada URL visitada queda en secrets/mediolanum_rastro.txt: con ella se automatizará la
-navegación hasta la descarga en la siguiente versión.
+Nada más entrar, y sin que hagas nada, lee también el PIAS (saldo y extracto completo; ver
+app/integrations/mediolanum/pias.py) y lo guarda en /inversiones. Con --solo-pias cierra el
+navegador después, sin esperar al extracto de la cuenta.
+
+Cada URL visitada queda en secrets/mediolanum_rastro.txt.
 
 Uso:
-    python scripts/scrape_mediolanum.py
+    python scripts/scrape_mediolanum.py [--solo-pias]
 """
 
 import subprocess
@@ -19,7 +22,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from playwright.sync_api import Download, Error, Page, sync_playwright
+from playwright.sync_api import Download, Error, Frame, Page, sync_playwright
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.database import SessionLocal  # noqa: E402
+from app.integrations.mediolanum import pias  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 PERFIL = RAIZ / "secrets" / "mediolanum_chrome"
@@ -27,6 +34,7 @@ RASTRO = RAIZ / "secrets" / "mediolanum_rastro.txt"
 DESTINO = RAIZ / "data" / "mediolanum"
 INICIO = "https://www.bancomediolanum.es/"
 ESPERA_MAX_MS = 15 * 60 * 1000
+CARTERA_PIAS = RAIZ / "secrets" / "mediolanum_pias_cartera.html"  # para mejorar la lectura
 
 
 def main() -> None:
@@ -54,22 +62,64 @@ def main() -> None:
         vigilar(pagina)
         pagina.goto(INICIO)
 
-        print("Entra en tu banca online, ve a Movimientos de la cuenta y descarga el extracto en Excel.")
-        print("En cuanto llegue el fichero se importa y el navegador se cierra.")
-        espera = 0
+        solo_pias = "--solo-pias" in sys.argv
+        print("Entra en tu banca online. Al entrar se lee el PIAS solo (no toques nada hasta que lo diga).", flush=True)
+        espera, pias_leido = 0, False
         try:
             while not descargados and espera < ESPERA_MAX_MS and contexto.pages:
-                contexto.pages[0].wait_for_timeout(1000)
+                if not pias_leido:
+                    portada = _portada(contexto)
+                    if portada is not None:
+                        pias_leido = True
+                        _leer_pias(portada)
+                        if solo_pias:
+                            break
+                        print("Ahora, si quieres, ve a Movimientos de la cuenta y descarga el extracto en Excel.", flush=True)
+                contexto.pages[-1].wait_for_timeout(1000)
                 espera += 1000
             contexto.close()
         except Error:
             pass  # cerraste el navegador a mano
 
+    if not descargados and pias_leido:
+        return
     if not descargados:
         print("No ha llegado ningún extracto.")
         sys.exit(1)
     for ruta in descargados:
         subprocess.run([sys.executable, str(RAIZ / "scripts" / "import_mediolanum.py"), str(ruta)], check=True)
+
+
+def _portada(contexto) -> Frame | None:
+    """El marco con la posición global, una vez dentro de la banca. bmedonline.es es un
+    frameset: el contenido está en el frame "area", no en la página."""
+    for pagina in contexto.pages:
+        for marco in pagina.frames:
+            try:
+                if "bmedonline.es" in marco.url and marco.locator("a[aria-label*='Póliza']").count():
+                    return marco
+            except Error:
+                pass
+    return None
+
+
+def _leer_pias(marco: Frame) -> None:
+    print("Dentro. Leyendo el PIAS, no toques nada...", flush=True)
+    try:
+        datos = pias.leer(marco)
+    except Exception as exc:  # noqa: BLE001
+        print(f"No se ha podido leer el PIAS: {exc}", flush=True)
+        return
+    CARTERA_PIAS.write_text(datos["cartera_html"])
+    db = SessionLocal()
+    try:
+        r = pias.guardar(db, datos)
+    finally:
+        db.close()
+    print(f"PIAS leído: saldo {r['saldo']:.2f} €, {r['movimientos']} movimientos del extracto "
+          f"({r['aportaciones_nuevas']} aportaciones nuevas), gastos de administración {r['gastos']:.2f} €.", flush=True)
+    for aviso in r["avisos"]:
+        print(f"  aviso: {aviso}", flush=True)
 
 
 def _apuntar(url: str) -> None:

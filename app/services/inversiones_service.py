@@ -16,7 +16,12 @@ from app.models import Aportacion, Posicion, Inversion, ManualAssetEntry
 from app.services.net_worth_service import latest_manual_assets
 
 MESES_RITMO = 12  # para "aportas X €/mes"
-MODULOS = {"bit2me": "/inversiones/bit2me", "traderepublic": "/inversiones/trade-republic"}  # proveedor -> página de su módulo
+MODULOS = {
+    "bit2me": "/inversiones/bit2me",
+    "traderepublic": "/inversiones/trade-republic",
+    "mediolanum": "/inversiones/pias",
+}  # proveedor -> página de su módulo
+ORIGEN = {"mediolanum": "desde su web"}  # cómo llegan los datos, si no es por API
 
 
 def inversion_de(db: Session, proveedor: str, nombre: str) -> Inversion:
@@ -71,6 +76,7 @@ def cartera(db: Session, hoy: date | None = None) -> dict:
             "id": inv.id,
             "nombre": inv.nombre,
             "modulo": MODULOS.get(inv.proveedor),
+            "origen": ORIGEN.get(inv.proveedor, "por API") if inv.proveedor else "módulo pendiente",
             "aportado": aportado,
             "aportaciones": n,
             "desde": desde,

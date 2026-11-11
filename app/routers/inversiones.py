@@ -1,3 +1,7 @@
+import subprocess
+import sys
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -6,6 +10,7 @@ from app.database import get_db
 from app.integrations import plataformas
 from app.integrations.bit2me import client as bit2me_client
 from app.integrations.bit2me import sync_service as bit2me_sync
+from app.integrations.mediolanum import pias
 from app.integrations.traderepublic import client as tr_client
 from app.integrations.traderepublic import sync_service as tr_sync
 from app.models import Inversion, ManualAssetEntry
@@ -106,3 +111,34 @@ def traderepublic_confirmar(request: Request, codigo: str = Form(""), db: Sessio
         db.rollback()
         return _pagina_tr(request, db, error=str(exc))
     return _pagina_tr(request, db, resultado, conectado=True)
+
+
+# --- PIAS Mediolanum: sin API; se lee al entrar en su banca con scripts/scrape_mediolanum.py ---
+
+RAIZ = Path(__file__).resolve().parent.parent.parent
+REGISTRO_PIAS = RAIZ / "secrets" / "mediolanum_pias.log"
+
+
+def _pagina_pias(request: Request, db: Session, **extra) -> HTMLResponse:
+    inv = pias.inversion(db)
+    db.commit()
+    return templates.TemplateResponse(request, "inversiones_pias.html", {
+        "m": inversiones_service.modulo(db, inv), **extra,
+    })
+
+
+@router.get("/pias", response_class=HTMLResponse)
+def pias_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return _pagina_pias(request, db)
+
+
+@router.post("/pias/actualizar", response_class=HTMLResponse)
+def pias_actualizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Abre el Chrome de Mediolanum en el escritorio (la app corre en este ordenador). El
+    login es del usuario; el PIAS se lee solo al entrar y el navegador se cierra."""
+    with REGISTRO_PIAS.open("w") as registro:
+        subprocess.Popen(
+            [sys.executable, str(RAIZ / "scripts" / "scrape_mediolanum.py"), "--solo-pias"],
+            cwd=RAIZ, stdout=registro, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+    return _pagina_pias(request, db, lanzado=True)

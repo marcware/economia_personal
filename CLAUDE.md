@@ -80,8 +80,8 @@ outside the platform, from its API or entered by hand) and its value as the late
 whose `name` equals `Inversion.nombre` — so `/patrimonio` sums it with no special case and lists only the
 remaining (non-investment) declared assets. `/inversiones`
 ([inversiones_service.py](app/services/inversiones_service.py)) is the overview; each platform gets its
-own module page, built one at a time (so far `/inversiones/bit2me` and `/inversiones/trade-republic`;
-the rest show "módulo pendiente"). Platforms with an API are listed once in
+own module page, built one at a time (so far `/inversiones/bit2me`, `/inversiones/trade-republic` and
+`/inversiones/pias`; the rest show "módulo pendiente"). Platforms with an API are listed once in
 [app/integrations/plataformas.py](app/integrations/plataformas.py), which `/conexiones`, `/inversiones`
 and `scripts/sync_accounts.py` iterate; each keeps per-asset snapshots in `Posicion` (filtered by
 `inversion_id`; cash is the `"EUR"` row) and its total as a `ManualAssetEntry`. `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
@@ -111,6 +111,17 @@ user's choice); login is pytr's v2 web login, confirmed with a tap in the phone 
 `client.Lector`, which only exposes the read calls in `LECTURAS` — pytr can also place orders and pay
 out, and nothing here may call those. Cost per position is Trade Republic's own `averageBuyIn`;
 aportaciones are deposits/removals classified with pytr's `tr_event_type_mapping`.
+
+The Mediolanum PIAS ([app/integrations/mediolanum/pias.py](app/integrations/mediolanum/pias.py)) has no
+API and is read from the online banking (`www.bmedonline.es`, an ASP.NET WebForms **frameset**: all
+content lives in the frame named `area`, not the page) inside the session the user opens in
+`scripts/scrape_mediolanum.py` — right after login, before the account-extract download (`--solo-pias`
+stops there; `/inversiones/pias` has a button that launches it). The landing page's PIAS link carries the
+balance in its `aria-label`; firing its `__doPostBack` selects the policy, then `basepage.aspx?a=2401`
+is the extract (requested year by year back to the start) and `a=2407` the portfolio. Aportaciones are
+the SUSCRIPCION rows (what reaches the funds, already net of entry charges); "Gastos de admón." are
+paid in units and kept as a realized loss per fund; "ABONO FIDELIDAD" units come free. It is not in
+`plataformas.py`: it needs the user's login, so it never runs on its own.
 
 ## Architecture
 

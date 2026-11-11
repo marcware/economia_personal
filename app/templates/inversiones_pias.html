@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}PIAS Mediolanum · Inversiones{% endblock %}
+{% block content %}
+  <p class="muted"><a href="/inversiones">← Inversiones</a></p>
+  <h1>PIAS Mediolanum</h1>
+
+  {% if lanzado %}
+    <p class="advice advice-info">Se ha abierto Chrome: entra en tu banca de Mediolanum y no toques nada después.
+      El PIAS se lee solo y el navegador se cierra. Luego recarga esta página.</p>
+  {% endif %}
+
+  {% if m.ultima %}
+  {% set gastos = -(m.realizado) %}
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Has metido</div>
+      <div class="card-value">{{ m.aportado|eur }}</div>
+      <div class="card-sub">lo que ha entrado en los fondos, {{ m.aportaciones|length }} aportaciones{% if m.aportaciones %} desde {{ m.aportaciones[-1].fecha.strftime('%m/%Y') }}{% endif %}</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">Vale hoy</div>
+      <div class="card-value">{{ m.valor|eur }}</div>
+      <div class="card-sub">saldo de la póliza a {{ m.ultima.strftime('%d/%m/%Y') }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ 'Ganas' if m.ganancia >= 0 else 'Pierdes' }}</div>
+      <div class="card-value {{ 'positive' if m.ganancia >= 0 else 'negative' }}">{{ m.ganancia|eur }}</div>
+      <div class="card-sub">{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo metido{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Gastos de administración</div>
+      <div class="card-value negative">{{ (-gastos)|eur }}</div>
+      <div class="card-sub">cobrados en participaciones, ya descontados del valor</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Fondos</h2>
+    <p class="muted">Participaciones según el extracto. El valor de cada fondo es una estimación (último precio
+       del extracto, ajustado para que sume el saldo real de la póliza).</p>
+    <table>
+      <thead><tr><th>Fondo</th><th class="num">Participaciones</th><th class="num">Metido</th><th class="num">Gastos</th>
+        <th class="num">Valor</th><th class="num">Resultado</th><th class="num">Peso</th></tr></thead>
+      <tbody>
+        {% for c in m.monedas %}
+          {% set resultado = c.latente + c.realizado %}
+          <tr>
+            <td><strong>{{ c.nombre }}</strong></td>
+            <td class="num">{{ c.cantidad|numero(3) }}</td>
+            <td class="num">{{ (c.coste - c.realizado)|eur }}</td>
+            <td class="num negative">{{ c.realizado|eur }}</td>
+            <td class="num">{{ c.valor|eur }}</td>
+            <td class="num"><span class="{{ 'positive' if resultado >= 0 else 'negative' }}">{{ resultado|eur }}</span></td>
+            <td class="num">{{ c.peso|numero(0) }} %</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if m.evolucion|length >= 2 %}
+    <div class="chart-box">
+      <h3>Valor frente a lo metido</h3>
+      <div class="chart-area"><canvas id="chartPias"></canvas></div>
+    </div>
+    <script src="/static/js/chart.min.js?v={{ version_estaticos() }}"></script>
+    <script src="/static/js/charts.js?v={{ version_estaticos() }}"></script>
+    <script>
+      const evolucion = {{ m.evolucion | tojson }};
+      new Chart(document.getElementById('chartPias'), {
+        type: 'line',
+        data: {
+          labels: evolucion.map(p => p.fecha.split('-').reverse().join('/')),
+          datasets: [
+            { label: 'Valor', data: evolucion.map(p => p.valor), borderColor: tema.ingresos, backgroundColor: tema.ingresos, tension: 0.2 },
+            { label: 'Metido', data: evolucion.map(p => p.aportado), borderColor: tema.neutro, backgroundColor: tema.neutro, borderDash: [4, 4], stepped: true },
+          ],
+        },
+        options: { pointRadius: 2, scales: { y: { ticks: { callback: v => tema.eur(v) } } } },
+      });
+    </script>
+  {% endif %}
+
+  <section class="plegable">
+    <details>
+    <summary><h2>Dinero metido</h2><span class="resumen">{{ m.aportaciones|length }} aportaciones · {{ m.aportado|eur }}</span></summary>
+    <p class="muted">Suscripciones del extracto del PIAS: lo que de cada prima llega a los fondos, ya sin los
+       gastos de entrada (por eso es algo menos de lo que te cargan en la cuenta).</p>
+    <table>
+      <thead><tr><th>Fecha</th><th>Fondo</th><th class="num">Importe</th></tr></thead>
+      <tbody>
+        {% for a in m.aportaciones %}
+          <tr><td>{{ a.fecha.strftime('%d/%m/%Y') }}</td><td class="muted">{{ a.nota or '' }}</td>
+            <td class="num {{ 'negative' if a.importe < 0 }}">{{ a.importe|float|eur }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </details>
+  </section>
+  {% else %}
+    <p>Todavía no se ha leído el PIAS.</p>
+  {% endif %}
+
+  <section>
+    <h2>Actualizar</h2>
+    <p class="muted">Mediolanum no tiene API: el PIAS se lee de su banca online. Se abre Chrome, entras tú (con la
+       confirmación en el móvil, como siempre) y el resto es automático. La contraseña nunca se guarda.
+       También se actualiza al descargar el extracto de la cuenta con <code>scripts/scrape_mediolanum.py</code>.</p>
+    <form method="post" action="/inversiones/pias/actualizar" data-enviando="Abriendo Chrome…">
+      <button type="submit" class="button">Actualizar PIAS</button>
+    </form>
+  </section>
+{% endblock %}
