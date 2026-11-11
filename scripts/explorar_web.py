@@ -13,6 +13,7 @@ Uso:
     python scripts/explorar_web.py <sitio> [url de inicio]
     python scripts/explorar_web.py mediolanum
     python scripts/explorar_web.py ing
+    python scripts/explorar_web.py quanloop
 """
 
 import json
@@ -27,6 +28,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 INICIOS = {
     "mediolanum": "https://www.bancomediolanum.es/",
     "ing": "https://www.ing.es/",
+    "quanloop": "https://quanloop.com/en/login",
 }
 SITIO = sys.argv[1] if len(sys.argv) > 1 else "mediolanum"
 INICIO = sys.argv[2] if len(sys.argv) > 2 else INICIOS[SITIO]

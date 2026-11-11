@@ -96,3 +96,25 @@ def test_plan_ing_aportaciones_y_pendiente_de_valorar():
     plan_pos, pendiente = r["posiciones"]
     assert (plan_pos["cantidad"], plan_pos["coste"], plan_pos["valor"]) == (28, 300, 330.0)
     assert (pendiente["symbol"], pendiente["valor"]) == ("EUR", 125)  # cargada pero aún sin participaciones
+
+
+def test_quanloop_ingresos_intereses_y_planes():
+    from app.integrations.quanloop import cuenta as ql
+
+    informe = "<td>11.11.2026</td><td>€1,160</td> <div>Low risk</div><div>Medium risk</div><div>High risk</div>" \
+              "<span>€870</span><span>€290</span><span>€0</span>"
+    panel = "<p>Profit payout (15.11.2026)</p><b>€9.15</b><p>Profit payout (15.12.2026)</p><b>€3.34</b>"
+    assert ql.planes(informe) == {"LOW": 870.0, "MEDIUM": 290.0, "HIGH": 0.0}
+    assert ql.por_cobrar(panel) == 12.49
+
+    extracto = {"endBalance": 1160.70, "entries": [
+        {"id": 1, "date": "2024-01-05", "type": "TOPUP", "amount": 1150.0},
+        {"id": 2, "date": "2024-08-07", "type": "WITHDRAWAL", "amount": -13.27},
+        {"id": 3, "date": "2026-10-15", "type": "INTEREST_PAYOUT", "amount": 23.96},
+        {"id": 4, "date": "2026-09-01", "type": "CASHBACK_PAYOUT", "amount": 0.01},
+    ]}
+    r = ql.calcular(extracto, ql.planes(informe), ql.por_cobrar(panel))
+    assert [a["importe"] for a in r["aportaciones"]] == [1150.0, -13.27]  # los intereses no son dinero metido
+    assert r["cobrado"] == 23.97 and not r["avisos"]
+    valores = {p["symbol"]: p["valor"] for p in r["posiciones"]}
+    assert valores == {"LOW": 870.0, "MEDIUM": 290.0, "EUR": 0.7, "PENDIENTE": 12.49}

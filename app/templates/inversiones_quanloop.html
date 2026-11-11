@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Quanloop · Inversiones{% endblock %}
+{% block content %}
+  <p class="muted"><a href="/inversiones">← Inversiones</a></p>
+  <h1>Quanloop</h1>
+
+  {% if lanzado %}
+    <p class="advice advice-info">Se ha abierto Chrome: entra en Quanloop (enlace del email y confirmación en la app)
+      y no toques nada después. Se lee solo y el navegador se cierra. Luego recarga esta página.</p>
+  {% endif %}
+
+  {% if m.ultima %}
+  {% set cobrado = m.euros.realizado if m.euros else 0 %}
+  {% set pendiente = m.monedas|selectattr('symbol', 'equalto', 'PENDIENTE')|map(attribute='valor')|sum %}
+  {% set planes = m.monedas|rejectattr('symbol', 'equalto', 'PENDIENTE')|list %}
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Has metido</div>
+      <div class="card-value">{{ m.aportado|eur }}</div>
+      <div class="card-sub">{{ m.aportaciones|length }} movimientos{% if m.aportaciones %} desde {{ m.aportaciones[-1].fecha.strftime('%m/%Y') }}{% endif %}</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">Vale hoy</div>
+      <div class="card-value">{{ m.valor|eur }}</div>
+      <div class="card-sub">a {{ m.ultima.strftime('%d/%m/%Y') }}{% if pendiente %}, con {{ pendiente|eur }} de intereses por cobrar{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ 'Ganas' if m.ganancia >= 0 else 'Pierdes' }}</div>
+      <div class="card-value {{ 'positive' if m.ganancia >= 0 else 'negative' }}">{{ m.ganancia|eur }}</div>
+      <div class="card-sub">{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo metido{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Intereses cobrados</div>
+      <div class="card-value">{{ cobrado|eur }}</div>
+      <div class="card-sub">se pagan el día 15 y se reinvierten</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Dónde está tu dinero</h2>
+    <table>
+      <thead><tr><th>Plan</th><th class="num">Importe</th><th class="num">Peso</th></tr></thead>
+      <tbody>
+        {% for p in planes %}
+          <tr><td>{{ p.nombre }}</td><td class="num">{{ p.valor|eur }}</td><td class="num">{{ p.peso|numero(0) }} %</td></tr>
+        {% endfor %}
+        {% if m.euros and m.euros.valor %}
+          <tr><td class="muted">Sin asignar</td><td class="num">{{ m.euros.valor|eur }}</td><td class="num">{{ m.euros.peso|numero(0) }} %</td></tr>
+        {% endif %}
+        {% if pendiente %}
+          <tr><td class="muted">Intereses ya ganados, por cobrar</td><td class="num">{{ pendiente|eur }}</td><td></td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <p class="muted">Préstamos de 1 € a sus clientes, repartidos por plan de riesgo. No hay precio que suba o baje: la ganancia
+       son los intereses.</p>
+  </section>
+
+  {% if m.evolucion|length >= 2 %}
+    <div class="chart-box">
+      <h3>Valor frente a lo metido</h3>
+      <div class="chart-area"><canvas id="chartQuanloop"></canvas></div>
+    </div>
+    <script src="/static/js/chart.min.js?v={{ version_estaticos() }}"></script>
+    <script src="/static/js/charts.js?v={{ version_estaticos() }}"></script>
+    <script>
+      const evolucion = {{ m.evolucion | tojson }};
+      new Chart(document.getElementById('chartQuanloop'), {
+        type: 'line',
+        data: {
+          labels: evolucion.map(p => p.fecha.split('-').reverse().join('/')),
+          datasets: [
+            { label: 'Valor', data: evolucion.map(p => p.valor), borderColor: tema.ingresos, backgroundColor: tema.ingresos, tension: 0.2 },
+            { label: 'Metido', data: evolucion.map(p => p.aportado), borderColor: tema.neutro, backgroundColor: tema.neutro, borderDash: [4, 4], stepped: true },
+          ],
+        },
+        options: { pointRadius: 2, scales: { y: { ticks: { callback: v => tema.eur(v) } } } },
+      });
+    </script>
+  {% endif %}
+
+  <section class="plegable">
+    <details>
+    <summary><h2>Dinero metido</h2><span class="resumen">{{ m.aportaciones|length }} · {{ m.aportado|eur }}</span></summary>
+    <p class="muted">Según el propio Quanloop: ingresos desde tu banco (+) y retiradas (−). Los intereses no son dinero nuevo.</p>
+    <table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Importe</th></tr></thead>
+      <tbody>
+        {% for a in m.aportaciones %}
+          <tr><td>{{ a.fecha.strftime('%d/%m/%Y') }}</td><td class="muted">{{ a.nota or '' }}</td>
+            <td class="num {{ 'negative' if a.importe < 0 }}">{{ a.importe|float|eur }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </details>
+  </section>
+  {% else %}
+    <p>Todavía no se ha leído Quanloop.</p>
+  {% endif %}
+
+  <section>
+    <h2>Actualizar</h2>
+    <p class="muted">Quanloop no tiene API pública: se lee de su web. Se abre Chrome, entras tú (enlace del email y
+       confirmación en la app) y el resto es automático. Solo consulta; la contraseña nunca se guarda.</p>
+    <form method="post" action="/inversiones/quanloop/actualizar" data-enviando="Abriendo Chrome…">
+      <button type="submit" class="button">Actualizar Quanloop</button>
+    </form>
+  </section>
+{% endblock %}

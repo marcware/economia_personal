@@ -81,7 +81,7 @@ whose `name` equals `Inversion.nombre` — so `/patrimonio` sums it with no spec
 remaining (non-investment) declared assets. `/inversiones`
 ([inversiones_service.py](app/services/inversiones_service.py)) is the overview; each platform gets its
 own module page, built one at a time (so far `/inversiones/bit2me`, `/inversiones/trade-republic`,
-`/inversiones/pias` and `/inversiones/plan-ing`; the rest show "módulo pendiente"). Platforms with an API are listed once in
+`/inversiones/pias`, `/inversiones/plan-ing` and `/inversiones/quanloop`; any other shows "módulo pendiente"). Platforms with an API are listed once in
 [app/integrations/plataformas.py](app/integrations/plataformas.py), which `/conexiones`, `/inversiones`
 and `scripts/sync_accounts.py` iterate; each keeps per-asset snapshots in `Posicion` (filtered by
 `inversion_id`; cash is the `"EUR"` row) and its total as a `ManualAssetEntry`. `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
@@ -131,6 +131,15 @@ fetched from inside the page so it rides the user's session. A contribution "pen
 has been charged but has no units yet — it's kept as a pending `"EUR"` position, not as a loss. The
 same position-keeping response also has the Cuenta Naranja balance and the mortgage's outstanding
 capital (not used yet).
+
+Quanloop ([app/integrations/quanloop/cuenta.py](app/integrations/quanloop/cuenta.py)) has no public API
+either. `scripts/scrape_quanloop.py` opens Chrome (profile `secrets/quanloop_chrome`; login is a link by
+email + confirmation in its app, and the session doesn't survive a closed browser), waits for the
+dashboard's call to `/int/account-statement`, then from inside the page asks for the full statement (JSON:
+TOPUP = aportación, withdrawals negative, `INTEREST_PAYOUT`/`CASHBACK_PAYOUT` = the return, paid into
+the account and reinvested), the daily-investments report (server-rendered HTML: split per risk plan)
+and the dashboard (interest earned but paid on the 15th next month, counted in the value as a
+`PENDIENTE` row). Interest collected is stored as `realizado_eur` on the `"EUR"` row.
 
 New sites are mapped first with `scripts/explorar_web.py <sitio>`, which records
 what the site receives (never what's sent) into `secrets/<sitio>_exploracion/`.

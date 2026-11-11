@@ -12,6 +12,7 @@ from app.integrations.bit2me import client as bit2me_client
 from app.integrations.bit2me import sync_service as bit2me_sync
 from app.integrations.ing import plan_pensiones
 from app.integrations.mediolanum import pias
+from app.integrations.quanloop import cuenta as quanloop
 from app.integrations.traderepublic import client as tr_client
 from app.integrations.traderepublic import sync_service as tr_sync
 from app.models import Inversion, ManualAssetEntry
@@ -163,5 +164,26 @@ def _pagina_plan_ing(request: Request, db: Session, **extra) -> HTMLResponse:
     inv = plan_pensiones.inversion(db)
     db.commit()
     return templates.TemplateResponse(request, "inversiones_plan_ing.html", {
+        "m": inversiones_service.modulo(db, inv), **extra,
+    })
+
+
+# --- Quanloop: sin API pública; se lee de su web con scripts/scrape_quanloop.py ---
+
+@router.get("/quanloop", response_class=HTMLResponse)
+def quanloop_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return _pagina_quanloop(request, db)
+
+
+@router.post("/quanloop/actualizar", response_class=HTMLResponse)
+def quanloop_actualizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    _lanzar("scrape_quanloop.py")
+    return _pagina_quanloop(request, db, lanzado=True)
+
+
+def _pagina_quanloop(request: Request, db: Session, **extra) -> HTMLResponse:
+    inv = quanloop.inversion(db)
+    db.commit()
+    return templates.TemplateResponse(request, "inversiones_quanloop.html", {
         "m": inversiones_service.modulo(db, inv), **extra,
     })

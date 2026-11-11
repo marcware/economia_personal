@@ -21,8 +21,9 @@ MODULOS = {
     "traderepublic": "/inversiones/trade-republic",
     "mediolanum": "/inversiones/pias",
     "ing": "/inversiones/plan-ing",
+    "quanloop": "/inversiones/quanloop",
 }  # proveedor -> página de su módulo
-ORIGEN = {"mediolanum": "desde su web", "ing": "desde su web"}  # cómo llegan los datos, si no es por API
+ORIGEN = {"mediolanum": "desde su web", "ing": "desde su web", "quanloop": "desde su web"}  # cómo llegan los datos, si no es por API
 
 
 def inversion_de(db: Session, proveedor: str, nombre: str) -> Inversion:
