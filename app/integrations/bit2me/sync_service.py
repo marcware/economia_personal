@@ -3,7 +3,7 @@
 Cada sincronización:
 - guarda como Aportacion cada entrada/salida de dinero de fuera (sin duplicar: external_id
   es el id de la operación en Bit2Me);
-- añade una CriptoPosicion por moneda con cantidad, precio, valor, coste FIFO, resultado
+- añade una Posicion por moneda con cantidad, precio, valor, coste FIFO, resultado
   de ventas y recompensas (ver cartera.py);
 - añade una ManualAssetEntry("Bit2Me") con el total, que es lo que suma /patrimonio.
 La usan scripts/sync_accounts.py, el botón de /conexiones y /inversiones/bit2me (que
@@ -14,12 +14,12 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import httpx
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.integrations.bit2me import cartera
 from app.integrations.bit2me.client import Bit2MeClient, configurado
-from app.models import Aportacion, CriptoPosicion, Inversion, ManualAssetEntry
+from app.models import Aportacion, Inversion, ManualAssetEntry, Posicion
+from app.services import inversiones_service
 
 PROVEEDOR = "bit2me"
 NOMBRE = "Bit2Me"
@@ -37,16 +37,11 @@ def _d(x: float, decimales: int = 2) -> Decimal:
 
 
 def inversion(db: Session) -> Inversion:
-    inv = db.query(Inversion).filter_by(proveedor=PROVEEDOR).first()
-    if inv is None:
-        inv = Inversion(nombre=NOMBRE, proveedor=PROVEEDOR)
-        db.add(inv)
-        db.flush()
-    return inv
+    return inversiones_service.inversion_de(db, PROVEEDOR, NOMBRE)
 
 
 def ultima_foto(db: Session) -> datetime | None:
-    return db.query(func.max(CriptoPosicion.recorded_at)).scalar()
+    return inversiones_service.ultima_foto(db, inversion(db))
 
 
 def sincronizar(db: Session, client: Bit2MeClient | None = None) -> dict:
@@ -80,8 +75,8 @@ def sincronizar(db: Session, client: Bit2MeClient | None = None) -> dict:
         valor = round(p["cantidad"] * precio, 2)
         if valor < VALOR_MINIMO and abs(p["realizado"]) < VALOR_MINIMO:
             continue
-        db.add(CriptoPosicion(
-            symbol=p["symbol"], cantidad=_d(p["cantidad"], 12), precio_eur=_d(precio, 8), valor_eur=_d(valor),
+        db.add(Posicion(
+            inversion_id=inv.id, symbol=p["symbol"], cantidad=_d(p["cantidad"], 12), precio_eur=_d(precio, 8), valor_eur=_d(valor),
             coste_eur=_d(p["coste"]), realizado_eur=_d(p["realizado"]), recompensas=_d(p["recompensas"], 12),
             recorded_at=ahora,
         ))

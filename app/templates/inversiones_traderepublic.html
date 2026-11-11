@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Trade Republic · Inversiones{% endblock %}
+{% block content %}
+  <p class="muted"><a href="/inversiones">← Inversiones</a></p>
+  <h1>Trade Republic</h1>
+
+  {% if error %}<p class="advice advice-danger">{{ error }}</p>{% endif %}
+  {% if resultado and resultado.error %}
+    <p class="advice advice-danger">No se ha podido leer Trade Republic: {{ resultado.error }}</p>
+  {% elif resultado %}
+    <p class="advice advice-info">{% if conectado %}Conectado. {% endif %}Trade Republic actualizado: {{ resultado.total|eur }}
+      {% if resultado.aportaciones_nuevas %}· {{ resultado.aportaciones_nuevas }} ingreso{{ "s" if resultado.aportaciones_nuevas != 1 }} nuevo{{ "s" if resultado.aportaciones_nuevas != 1 }}{% endif %}.</p>
+  {% endif %}
+  {% if resultado and resultado.avisos %}
+    <p class="advice advice-warning">{{ resultado.avisos|join(" · ") }}</p>
+  {% endif %}
+
+  {% if m.ultima %}
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Has metido</div>
+      <div class="card-value">{{ m.aportado|eur }}</div>
+      <div class="card-sub">{{ m.aportaciones|length }} ingreso{{ "s" if m.aportaciones|length != 1 }} desde tu banco{% if m.aportaciones %}, desde {{ m.aportaciones[-1].fecha.strftime('%m/%Y') }}{% endif %}</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">Vale hoy</div>
+      <div class="card-value">{{ m.valor|eur }}</div>
+      <div class="card-sub">a {{ m.ultima.strftime('%d/%m/%Y %H:%M') }} (UTC)</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ 'Ganas' if m.ganancia >= 0 else 'Pierdes' }}</div>
+      <div class="card-value {{ 'positive' if m.ganancia >= 0 else 'negative' }}">{{ m.ganancia|eur }}</div>
+      <div class="card-sub">{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo metido{% endif %}</div>
+    </div>
+    {% if m.euros %}
+    <div class="card">
+      <div class="card-label">Efectivo sin invertir</div>
+      <div class="card-value">{{ m.euros.valor|eur }}</div>
+      <div class="card-sub">saldo en la cuenta de Trade Republic</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <section>
+    <h2>Lo que tienes</h2>
+    <p class="muted">"Compraste a" es el precio medio de compra que calcula Trade Republic (con comisiones).</p>
+    <table>
+      <thead><tr><th>Activo</th><th class="num">Cantidad</th><th class="num">Precio hoy</th><th class="num">Compraste a</th>
+        <th class="num">Coste</th><th class="num">Valor</th><th class="num">Ganancia</th><th class="num">Peso</th></tr></thead>
+      <tbody>
+        {% for c in m.monedas %}
+          <tr>
+            <td><strong>{{ c.nombre }}</strong><span class="nota">{{ c.symbol }}</span></td>
+            <td class="num">{{ c.cantidad|numero(6 if c.cantidad < 10 else 2) }}</td>
+            <td class="num">{{ c.precio|eur }}</td>
+            <td class="num">{% if c.precio_medio %}{{ c.precio_medio|eur }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{{ c.coste|eur }}</td>
+            <td class="num">{{ c.valor|eur }}</td>
+            <td class="num"><span class="{{ 'positive' if c.latente >= 0 else 'negative' }}">{{ c.latente|eur }}</span>
+              {% if c.latente_pct is not none %}<span class="nota">{{ c.latente_pct|numero(1) }} %</span>{% endif %}</td>
+            <td class="num">{{ c.peso|numero(0) }} %</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form method="post" action="/inversiones/trade-republic/sincronizar" data-aviso="Trade Republic actualizado" data-enviando="Consultando Trade Republic…">
+      <button type="submit" class="button-sm button-secondary">Actualizar ahora</button>
+      <span class="muted">Se actualiza solo al abrir Inversiones si han pasado unas horas, y al sincronizar en <a href="/conexiones">Conexiones</a>.</span>
+    </form>
+  </section>
+
+  {% if m.evolucion|length >= 2 %}
+    <div class="chart-box">
+      <h3>Valor frente a lo metido</h3>
+      <div class="chart-area"><canvas id="chartTR"></canvas></div>
+    </div>
+    <script src="/static/js/chart.min.js?v={{ version_estaticos() }}"></script>
+    <script src="/static/js/charts.js?v={{ version_estaticos() }}"></script>
+    <script>
+      const evolucion = {{ m.evolucion | tojson }};
+      new Chart(document.getElementById('chartTR'), {
+        type: 'line',
+        data: {
+          labels: evolucion.map(p => p.fecha.split('-').reverse().join('/')),
+          datasets: [
+            { label: 'Valor', data: evolucion.map(p => p.valor), borderColor: tema.ingresos, backgroundColor: tema.ingresos, tension: 0.2 },
+            { label: 'Metido', data: evolucion.map(p => p.aportado), borderColor: tema.neutro, backgroundColor: tema.neutro, borderDash: [4, 4], stepped: true },
+          ],
+        },
+        options: { pointRadius: 2, scales: { y: { ticks: { callback: v => tema.eur(v) } } } },
+      });
+    </script>
+  {% endif %}
+
+  <section class="plegable">
+    <details>
+    <summary><h2>Dinero metido</h2><span class="resumen">{{ m.aportaciones|length }} movimiento{{ "s" if m.aportaciones|length != 1 }} · {{ m.aportado|eur }}</span></summary>
+    <p class="muted">Según el propio Trade Republic: ingresos a la cuenta (+) y retiradas o pagos con su tarjeta (−).
+       Comprar oro con el saldo no es dinero nuevo y no sale aquí.</p>
+    <table>
+      <thead><tr><th>Fecha</th><th>Origen</th><th class="num">Importe</th></tr></thead>
+      <tbody>
+        {% for a in m.aportaciones %}
+          <tr><td>{{ a.fecha.strftime('%d/%m/%Y') }}</td><td class="muted">{{ (a.nota or '')|title }}</td>
+            <td class="num {{ 'negative' if a.importe < 0 }}">{{ a.importe|float|eur }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </details>
+  </section>
+  {% endif %}
+
+  <section>
+    <h2>Conexión</h2>
+    {% if not configurado %}
+      <p>Añade a <code>.env</code> tu teléfono (con prefijo, p. ej. <code>+34600000000</code>) y el PIN con el que
+         entras en la app de Trade Republic, y reinicia el servidor:</p>
+      <pre>TRADEREPUBLIC_PHONE=+34…
+TRADEREPUBLIC_PIN=…</pre>
+    {% elif login %}
+      {% if login.necesita_codigo %}
+        <p>Escribe el código de tu app autenticadora:</p>
+      {% else %}
+        <p><strong>Abre la app de Trade Republic en el móvil y confirma el inicio de sesión</strong>
+           (tienes unos {{ login.segundos }} segundos). Después pulsa el botón.</p>
+      {% endif %}
+      <form method="post" action="/inversiones/trade-republic/confirmar" class="inline-form" data-enviando="Esperando la confirmación…">
+        {% if login.necesita_codigo %}<input type="text" name="codigo" inputmode="numeric" autocomplete="one-time-code" required>{% endif %}
+        <button type="submit" class="button">{{ 'Enviar código' if login.necesita_codigo else 'Ya lo he confirmado' }}</button>
+      </form>
+    {% elif sesion %}
+      <p class="muted">Sesión activa: se lee sin pedirte nada hasta que caduque. Solo consulta: la app no puede
+         comprar, vender ni retirar dinero (librería pytr, versión revisada).</p>
+    {% else %}
+      <p><strong>La sesión ha caducado.</strong> Al conectar, Trade Republic te pedirá confirmarlo en la app del móvil.</p>
+      <form method="post" action="/inversiones/trade-republic/login" data-enviando="Conectando…">
+        <button type="submit" class="button">Conectar con Trade Republic</button>
+      </form>
+    {% endif %}
+  </section>
+{% endblock %}

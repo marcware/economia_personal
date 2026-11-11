@@ -7,7 +7,7 @@ import pytest
 
 from app.integrations.bit2me import cartera, sync_service
 from app.integrations.bit2me.client import firma
-from app.models import Aportacion, CriptoPosicion, ManualAssetEntry
+from app.models import Aportacion, Posicion, ManualAssetEntry
 from app.services import inversiones_service
 
 
@@ -69,7 +69,7 @@ def test_sincronizar_guarda_aportaciones_sin_duplicar_y_posiciones(db):
     assert sync_service.sincronizar(db, ClienteFalso())["aportaciones_nuevas"] == 0
     assert db.query(Aportacion).count() == 4
 
-    m = inversiones_service.modulo_cripto(db, sync_service.inversion(db))
+    m = inversiones_service.modulo(db, sync_service.inversion(db))
     assert m["aportado"] == pytest.approx(120.0)
     assert m["valor"] == pytest.approx(264.0)
     assert [c["symbol"] for c in m["monedas"]] == ["BTC", "ETH"]
@@ -82,7 +82,7 @@ def test_sincronizar_guarda_aportaciones_sin_duplicar_y_posiciones(db):
 def test_sin_clave_no_sincroniza(db, monkeypatch):
     monkeypatch.setattr(sync_service, "configurado", lambda: False)
     assert sync_service.sincronizar_si_toca(db) is None
-    assert db.query(CriptoPosicion).count() == 0
+    assert db.query(Posicion).count() == 0
 
 
 def test_evolucion_valor_frente_a_aportado(db):

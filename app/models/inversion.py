@@ -42,21 +42,24 @@ class Aportacion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
-class CriptoPosicion(Base):
-    """Foto de una moneda en Bit2Me al sincronizar: cantidad (wallet + Earn + Pro) y su
-    valor en euros en ese momento. Todas las filas de una sincronización comparten
-    `recorded_at`; el total se guarda además como ManualAssetEntry("Bit2Me"), que es lo que
-    leen /inversiones y /patrimonio."""
+class Posicion(Base):
+    """Foto de un activo de una inversión al sincronizar (una moneda en Bit2Me, un ETF en
+    Trade Republic, el efectivo como symbol "EUR"): cantidad, precio y valor en euros en
+    ese momento. Las filas de una sincronización comparten `recorded_at`; el total se
+    guarda además como ManualAssetEntry(nombre de la inversión), que es lo que leen
+    /inversiones y /patrimonio."""
 
-    __tablename__ = "cripto_posiciones"
+    __tablename__ = "posiciones"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    symbol: Mapped[str] = mapped_column(String(20))
+    inversion_id: Mapped[int] = mapped_column(ForeignKey("inversiones.id"))
+    symbol: Mapped[str] = mapped_column(String(20))  # ticker de la cripto o ISIN
+    nombre: Mapped[str | None] = mapped_column(String(100), default=None)
     cantidad: Mapped[Decimal] = mapped_column(Numeric(30, 12))
     precio_eur: Mapped[Decimal] = mapped_column(Numeric(20, 8))
     valor_eur: Mapped[Decimal] = mapped_column(Numeric(12, 2))
-    # De bit2me/cartera.py: lo que costó lo que queda (FIFO), lo ganado/perdido en ventas ya
-    # hechas y la cantidad que vino de recompensas de Earn (a coste cero).
+    # Lo que costó lo que queda (FIFO en Bit2Me, el precio medio del broker en Trade
+    # Republic), lo ganado/perdido en ventas ya hechas y lo llegado gratis (Earn).
     coste_eur: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     realizado_eur: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
     recompensas: Mapped[Decimal | None] = mapped_column(Numeric(30, 12), default=None)

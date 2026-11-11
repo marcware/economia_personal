@@ -23,9 +23,9 @@
     </div>
   </div>
 
-  {% if bit2me_error %}
-    <p class="advice advice-danger">No se ha podido leer Bit2Me: {{ bit2me_error }}</p>
-  {% endif %}
+  {% for nombre, error in errores.items() %}
+    <p class="advice advice-danger">No se ha podido leer {{ nombre }}: {{ error }}</p>
+  {% endfor %}
 
   <section>
     <h2>Cartera</h2>

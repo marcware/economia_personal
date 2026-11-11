@@ -17,6 +17,9 @@ dependencies = [
     "cryptography>=43.0",
     "openpyxl>=3.1",
     "playwright>=1.47",  # scripts/scrape_mediolanum.py, con el Chrome del sistema
+    # Trade Republic (API no oficial). Fijado a un commit revisado a mano el 2026-11-11: el
+    # PIN solo viaja a api.traderepublic.com. No subir de versión sin revisar el diff.
+    "pytr @ git+https://github.com/pytr-org/pytr@85f76576856f0e97c3461a6b16716d6f93b4e62e",
 ]
 
 [project.optional-dependencies]

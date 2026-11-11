@@ -7,8 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.integrations.bit2me import client as bit2me_client
-from app.integrations.bit2me import sync_service as bit2me_sync
+from app.integrations import plataformas
 from app.integrations.enablebanking.auth_flow import create_session, start_authorization
 from app.integrations.enablebanking.client import EnableBankingClient, EnableBankingConfigError
 from app.integrations.enablebanking.sync_service import sync_all
@@ -39,8 +38,7 @@ def _pagina(request: Request, db: Session, **extra) -> HTMLResponse:
         request,
         "connections.html",
         {"connections": connections, "accounts": accounts, "aspsps": ASPSPS, "now": now,
-         "ultima_sync": ultima_sync, "bit2me_api": bit2me_client.configurado(),
-         "bit2me_ultima": bit2me_sync.ultima_foto(db), **extra},
+         "ultima_sync": ultima_sync, "plataformas": plataformas.estado(db), **extra},
     )
 
 
@@ -52,26 +50,16 @@ def conexiones_home(request: Request, db: Session = Depends(get_db)) -> HTMLResp
 @router.post("/sincronizar", response_class=HTMLResponse)
 def sincronizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     """Lo mismo que scripts/sync_accounts.py, desde la interfaz y enseñando el resultado."""
-    bit2me = _sincronizar_bit2me(db)
+    inversiones = plataformas.sincronizar_todas(db)
     try:
         client = EnableBankingClient()
     except EnableBankingConfigError as exc:
-        return _pagina(request, db, sync_error=str(exc), bit2me=bit2me)
+        return _pagina(request, db, sync_error=str(exc), sync_inversiones=inversiones)
     filas = sync_all(db, client)
     # Con los movimientos nuevos, los presupuestos de los meses abiertos se ponen al día.
     budget_service.ajustar_meses_abiertos(db)
-    return _pagina(request, db, sync_filas=filas, bit2me=bit2me)
+    return _pagina(request, db, sync_filas=filas, sync_inversiones=inversiones)
 
-
-def _sincronizar_bit2me(db: Session) -> dict | None:
-    """Bit2Me no es un banco, pero "Sincronizar ahora" también trae su valor si hay clave."""
-    if not bit2me_client.configurado():
-        return None
-    try:
-        return bit2me_sync.sincronizar(db)
-    except Exception as exc:  # noqa: BLE001
-        db.rollback()
-        return {"error": str(exc)}
 
 
 @router.get("/conectar/{aspsp_key}")

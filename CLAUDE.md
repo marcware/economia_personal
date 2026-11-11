@@ -80,8 +80,11 @@ outside the platform, from its API or entered by hand) and its value as the late
 whose `name` equals `Inversion.nombre` — so `/patrimonio` sums it with no special case and lists only the
 remaining (non-investment) declared assets. `/inversiones`
 ([inversiones_service.py](app/services/inversiones_service.py)) is the overview; each platform gets its
-own module page, built one at a time (so far only `/inversiones/bit2me`; the rest show "módulo
-pendiente"). `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
+own module page, built one at a time (so far `/inversiones/bit2me` and `/inversiones/trade-republic`;
+the rest show "módulo pendiente"). Platforms with an API are listed once in
+[app/integrations/plataformas.py](app/integrations/plataformas.py), which `/conexiones`, `/inversiones`
+and `scripts/sync_accounts.py` iterate; each keeps per-asset snapshots in `Posicion` (filtered by
+`inversion_id`; cash is the `"EUR"` row) and its total as a `ManualAssetEntry`. `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
 kept only for a later step that compares the platform's own figures with the bank transfers — don't
 compute anything in the investment pages from `Transaction`.
 
@@ -98,6 +101,16 @@ new aportaciones (deduplicated by Bit2Me operation id), a `CriptoPosicion` snaps
 `ManualAssetEntry("Bit2Me")` total; it runs from "Sincronizar ahora" on `/conexiones`,
 `scripts/sync_accounts.py`, and on opening `/inversiones` or `/inversiones/bit2me` when the last snapshot
 is older than `HORAS_FOTO`.
+
+Trade Republic ([app/integrations/traderepublic/](app/integrations/traderepublic/)) has no public API: it
+goes through `pytr` (its private web API), pinned in `pyproject.toml` to a commit audited by hand on
+2026-11-11 (PIN only sent to `api.traderepublic.com`, PyPI build identical to the source) — don't bump it
+without reviewing the diff. Phone and PIN live in `.env` (`TRADEREPUBLIC_PHONE`/`TRADEREPUBLIC_PIN`, the
+user's choice); login is pytr's v2 web login, confirmed with a tap in the phone app from
+`/inversiones/trade-republic`, and the session cookies are saved in `secrets/`. All reads go through
+`client.Lector`, which only exposes the read calls in `LECTURAS` — pytr can also place orders and pay
+out, and nothing here may call those. Cost per position is Trade Republic's own `averageBuyIn`;
+aportaciones are deposits/removals classified with pytr's `tr_event_type_mapping`.
 
 ## Architecture
 

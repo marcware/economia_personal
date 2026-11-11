@@ -12,11 +12,25 @@ from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Aportacion, CriptoPosicion, Inversion, ManualAssetEntry
+from app.models import Aportacion, Posicion, Inversion, ManualAssetEntry
 from app.services.net_worth_service import latest_manual_assets
 
 MESES_RITMO = 12  # para "aportas X €/mes"
-MODULOS = {"bit2me": "/inversiones/bit2me"}  # proveedor -> página de su módulo
+MODULOS = {"bit2me": "/inversiones/bit2me", "traderepublic": "/inversiones/trade-republic"}  # proveedor -> página de su módulo
+
+
+def inversion_de(db: Session, proveedor: str, nombre: str) -> Inversion:
+    """La inversión de una plataforma con API; se crea si aún no existe."""
+    inv = db.query(Inversion).filter_by(proveedor=proveedor).first()
+    if inv is None:
+        inv = Inversion(nombre=nombre, proveedor=proveedor)
+        db.add(inv)
+        db.flush()
+    return inv
+
+
+def ultima_foto(db: Session, inv: Inversion):
+    return db.query(func.max(Posicion.recorded_at)).filter(Posicion.inversion_id == inv.id).scalar()
 
 
 def inversiones(db: Session) -> list[Inversion]:
@@ -107,13 +121,13 @@ def evolucion(db: Session, inv: Inversion) -> list[dict]:
     ]
 
 
-def modulo_cripto(db: Session, inv: Inversion) -> dict:
-    """Módulo de una plataforma cripto (Bit2Me): totales, cada moneda de la última foto con
-    su ganancia o pérdida, y de dónde sale el resultado (monedas, ventas, comisiones)."""
+def modulo(db: Session, inv: Inversion) -> dict:
+    """Módulo de una plataforma (Bit2Me, Trade Republic): totales, cada activo de la última
+    foto con su ganancia o pérdida, y de dónde sale el resultado (activos, ventas, comisiones)."""
     aportaciones = db.query(Aportacion).filter_by(inversion_id=inv.id).order_by(Aportacion.fecha.desc()).all()
     aportado = sum(float(a.importe) for a in aportaciones)
-    ultima = db.query(func.max(CriptoPosicion.recorded_at)).scalar()
-    filas = db.query(CriptoPosicion).filter_by(recorded_at=ultima).all() if ultima else []
+    ultima = ultima_foto(db, inv)
+    filas = db.query(Posicion).filter_by(inversion_id=inv.id, recorded_at=ultima).all() if ultima else []
 
     valor = sum(float(f.valor_eur) for f in filas)
     monedas, euros = [], None
@@ -122,6 +136,7 @@ def modulo_cripto(db: Session, inv: Inversion) -> dict:
         recompensas = float(f.recompensas or 0)
         fila = {
             "symbol": f.symbol,
+            "nombre": f.nombre or f.symbol,
             "cantidad": cantidad,
             "precio": float(f.precio_eur),
             "valor": float(f.valor_eur),

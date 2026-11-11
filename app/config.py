@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     bit2me_api_secret: str | None = None
     bit2me_api_base: str = "https://gateway.bit2me.com"
 
+    traderepublic_phone: str | None = None  # formato +34600000000
+    traderepublic_pin: str | None = None
+    traderepublic_cookies_path: Path = BASE_DIR / "secrets" / "traderepublic_cookies.txt"
+
     @model_validator(mode="after")
     def _resolve_relative_paths(self) -> "Settings":
         if self.enablebanking_private_key_path and not self.enablebanking_private_key_path.is_absolute():

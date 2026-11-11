@@ -3,8 +3,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.integrations import plataformas
 from app.integrations.bit2me import client as bit2me_client
 from app.integrations.bit2me import sync_service as bit2me_sync
+from app.integrations.traderepublic import client as tr_client
+from app.integrations.traderepublic import sync_service as tr_sync
 from app.models import Inversion, ManualAssetEntry
 from app.services import inversiones_service
 from app.templating import templates
@@ -15,10 +18,11 @@ router = APIRouter(prefix="/inversiones", tags=["inversiones"])
 @router.get("", response_class=HTMLResponse)
 def inversiones_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     # Bit2Me se pone al día solo si la última foto es vieja, para que el total sea actual.
-    bit2me = bit2me_sync.sincronizar_si_toca(db)
+    # Las plataformas con API se ponen al día solas si su última foto es vieja.
+    errores = plataformas.sincronizar_si_toca(db)
     return templates.TemplateResponse(request, "inversiones.html", {
         "cartera": inversiones_service.cartera(db),
-        "bit2me_error": bit2me.get("error") if bit2me else None,
+        "errores": errores,
     })
 
 
@@ -36,7 +40,7 @@ def _pagina_bit2me(request: Request, db: Session, resultado: dict | None) -> HTM
     inv = bit2me_sync.inversion(db)
     db.commit()
     return templates.TemplateResponse(request, "inversiones_bit2me.html", {
-        "m": inversiones_service.modulo_cripto(db, inv),
+        "m": inversiones_service.modulo(db, inv),
         "api": bit2me_client.configurado(),
         "resultado": resultado,
     })
@@ -55,3 +59,50 @@ def sincronizar_bit2me(request: Request, db: Session = Depends(get_db)) -> HTMLR
         db.rollback()
         resultado = {"error": str(exc)}
     return _pagina_bit2me(request, db, resultado)
+
+
+def _pagina_tr(request: Request, db: Session, resultado: dict | None = None, **extra) -> HTMLResponse:
+    inv = tr_sync.inversion(db)
+    db.commit()
+    return templates.TemplateResponse(request, "inversiones_traderepublic.html", {
+        "m": inversiones_service.modulo(db, inv),
+        "configurado": tr_client.configurado(),
+        "sesion": tr_client.sesion_activa(),
+        "resultado": resultado,
+        **extra,
+    })
+
+
+@router.get("/trade-republic", response_class=HTMLResponse)
+def traderepublic_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return _pagina_tr(request, db, tr_sync.sincronizar_si_toca(db))
+
+
+@router.post("/trade-republic/sincronizar", response_class=HTMLResponse)
+def traderepublic_sincronizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    try:
+        resultado = tr_sync.sincronizar(db)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        resultado = {"error": str(exc)}
+    return _pagina_tr(request, db, resultado)
+
+
+@router.post("/trade-republic/login", response_class=HTMLResponse)
+def traderepublic_login(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    try:
+        login = tr_client.iniciar_login()
+    except Exception as exc:  # noqa: BLE001
+        return _pagina_tr(request, db, error=str(exc))
+    return _pagina_tr(request, db, login=login)
+
+
+@router.post("/trade-republic/confirmar", response_class=HTMLResponse)
+def traderepublic_confirmar(request: Request, codigo: str = Form(""), db: Session = Depends(get_db)) -> HTMLResponse:
+    try:
+        tr_client.completar_login(codigo.strip() or None)
+        resultado = tr_sync.sincronizar(db)  # recién conectado: primera foto ya
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        return _pagina_tr(request, db, error=str(exc))
+    return _pagina_tr(request, db, resultado, conectado=True)

@@ -4,7 +4,7 @@ from app.models.budget import Budget
 from app.models.categorization_rule import AmountSign, CategorizationRule
 from app.models.category import BudgetGroup, Category
 from app.models.goal import FinancialGoal, GoalType
-from app.models.inversion import Aportacion, CriptoPosicion, Inversion
+from app.models.inversion import Aportacion, Inversion, Posicion
 from app.models.net_worth import AccountBalance, ManualAssetEntry, ManualLiabilityEntry
 from app.models.note import FinancialNote
 from app.models.settings import UserSettings
@@ -27,8 +27,8 @@ __all__ = [
     "FinancialGoal",
     "GoalType",
     "Aportacion",
-    "CriptoPosicion",
     "Inversion",
+    "Posicion",
     "FinancialNote",
     "UserSettings",
     "Transaction",

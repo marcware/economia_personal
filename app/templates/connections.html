@@ -26,24 +26,32 @@
         {% endif %}
       {% endfor %}
     {% endif %}
-    {% if bit2me and bit2me.error %}
-      <p class="advice advice-danger">Bit2Me: error — {{ bit2me.error }}</p>
-    {% elif bit2me %}
-      <p class="advice advice-info">Bit2Me: {{ bit2me.total|eur }} en {{ bit2me.monedas }} moneda{{ "s" if bit2me.monedas != 1 }}
-        (<a href="/inversiones/bit2me">ver Bit2Me</a>).</p>
-    {% endif %}
+    {% for f in sync_inversiones or [] %}
+      {% if f.error %}
+        <p class="advice advice-danger">{{ f.nombre }}: error — {{ f.error }} (<a href="{{ f.url }}">revisar</a>)</p>
+      {% else %}
+        <p class="advice advice-info">{{ f.nombre }}: {{ f.resultado.total|eur }}
+          {% if f.resultado.aportaciones_nuevas %}· {{ f.resultado.aportaciones_nuevas }} ingreso{{ "s" if f.resultado.aportaciones_nuevas != 1 }} nuevo{{ "s" if f.resultado.aportaciones_nuevas != 1 }}{% endif %}
+          (<a href="{{ f.url }}">ver</a>).</p>
+      {% endif %}
+    {% endfor %}
   </section>
 
   <section>
-    <h2>Bit2Me (cripto)</h2>
-    {% if bit2me_api %}
-      <p>Conectado por API de solo lectura.
-        {% if bit2me_ultima %}Última foto: {{ bit2me_ultima.strftime('%d/%m/%Y %H:%M') }} (UTC).{% endif %}
-        "Sincronizar ahora" también lo actualiza.</p>
-    {% else %}
-      <p class="muted">Sin conectar: faltan <code>BIT2ME_API_KEY</code> y <code>BIT2ME_API_SECRET</code> en <code>.env</code>
-        (instrucciones en <a href="/inversiones">Inversiones</a>).</p>
-    {% endif %}
+    <h2>Plataformas de inversión</h2>
+    <table>
+      <thead><tr><th>Plataforma</th><th>Estado</th><th>Última foto (UTC)</th></tr></thead>
+      <tbody>
+        {% for p in plataformas %}
+          <tr>
+            <td><a href="{{ p.url }}">{{ p.nombre }}</a></td>
+            <td>{% if p.configurado %}<span class="badge ok">conectada</span>{% else %}<span class="muted">sin configurar (instrucciones en su página)</span>{% endif %}</td>
+            <td>{{ p.ultima.strftime('%d/%m/%Y %H:%M') if p.ultima else '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">"Sincronizar ahora" también las actualiza.</p>
   </section>
 
   <section>
