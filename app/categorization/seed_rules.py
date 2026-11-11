@@ -40,6 +40,9 @@ CATEGORY_TREE: list[tuple[str, str, BudgetGroup | None, bool, bool, bool]] = [
     # Botes, regalos en grupo y recibos del piso alquilado que devuelve la inquilina: lo que
     # pagas por otros y te devuelven no es ni ingreso ni gasto tuyo.
     ("Movimientos excluidos", "Dinero de paso (botes)", BudgetGroup.EXCLUIDO, True, False, False),
+    # Vender un bien y cancelar deudas con lo cobrado cambia el patrimonio, no es ingreso,
+    # gasto ni ahorro del mes (nov-2026: venta del piso alquilado y fin de los préstamos).
+    ("Movimientos excluidos", "Venta de patrimonio y cancelación de deuda", BudgetGroup.EXCLUIDO, False, False, False),
     ("Nómina y otras prestaciones", "Nómina o Pensión", BudgetGroup.INGRESO, False, False, False),
     ("Ocio y viajes", "Cafeterías y restaurantes", BudgetGroup.DESEO, False, False, False),
     ("Ocio y viajes", "Cine, teatro y espectáculos", BudgetGroup.DESEO, False, False, False),
