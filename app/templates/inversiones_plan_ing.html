@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Plan de pensiones ING · Inversiones{% endblock %}
+{% block content %}
+  <p class="muted"><a href="/inversiones">← Inversiones</a></p>
+  <h1>Plan de pensiones ING</h1>
+
+  {% if lanzado %}
+    <p class="advice advice-info">Se ha abierto Chrome: entra en tu área de clientes de ING y no toques nada después.
+      El plan se lee solo y el navegador se cierra. Luego recarga esta página.</p>
+  {% endif %}
+
+  {% if m.ultima %}
+  {% set plan = m.monedas[0] if m.monedas else none %}
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Has aportado</div>
+      <div class="card-value">{{ m.aportado|eur }}</div>
+      <div class="card-sub">{{ m.aportaciones|length }} aportaciones{% if m.aportaciones %} desde {{ m.aportaciones[-1].fecha.strftime('%m/%Y') }}{% endif %}</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">Vale hoy</div>
+      <div class="card-value">{{ m.valor|eur }}</div>
+      <div class="card-sub">a {{ m.ultima.strftime('%d/%m/%Y') }}{% if m.euros %}, con {{ m.euros.valor|eur(0) }} pendientes de invertir{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ 'Ganas' if m.ganancia >= 0 else 'Pierdes' }}</div>
+      <div class="card-value {{ 'positive' if m.ganancia >= 0 else 'negative' }}">{{ m.ganancia|eur }}</div>
+      <div class="card-sub">{% if m.rentabilidad is not none %}{{ m.rentabilidad|numero(1) }} % sobre lo aportado{% endif %}</div>
+    </div>
+  </div>
+
+  {% if plan %}
+  <section>
+    <h2>{{ plan.nombre }}</h2>
+    <table>
+      <thead><tr><th class="num">Participaciones</th><th class="num">Valor hoy</th><th class="num">Compraste a (media)</th>
+        <th class="num">Aportado</th><th class="num">Valor</th><th class="num">Ganancia</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num">{{ plan.cantidad|numero(4) }}</td>
+          <td class="num">{{ plan.precio|eur }}</td>
+          <td class="num">{% if plan.precio_medio %}{{ plan.precio_medio|eur }}{% endif %}</td>
+          <td class="num">{{ plan.coste|eur }}</td>
+          <td class="num">{{ plan.valor|eur }}</td>
+          <td class="num"><span class="{{ 'positive' if plan.latente >= 0 else 'negative' }}">{{ plan.latente|eur }}</span>
+            {% if plan.latente_pct is not none %}<span class="nota">{{ plan.latente_pct|numero(1) }} %</span>{% endif %}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted">La ganancia ya descuenta las comisiones del plan, que se cobran dentro del valor de la participación.</p>
+  </section>
+  {% endif %}
+
+  {% if m.evolucion|length >= 2 %}
+    <div class="chart-box">
+      <h3>Valor frente a lo aportado</h3>
+      <div class="chart-area"><canvas id="chartPlan"></canvas></div>
+    </div>
+    <script src="/static/js/chart.min.js?v={{ version_estaticos() }}"></script>
+    <script src="/static/js/charts.js?v={{ version_estaticos() }}"></script>
+    <script>
+      const evolucion = {{ m.evolucion | tojson }};
+      new Chart(document.getElementById('chartPlan'), {
+        type: 'line',
+        data: {
+          labels: evolucion.map(p => p.fecha.split('-').reverse().join('/')),
+          datasets: [
+            { label: 'Valor', data: evolucion.map(p => p.valor), borderColor: tema.ingresos, backgroundColor: tema.ingresos, tension: 0.2 },
+            { label: 'Aportado', data: evolucion.map(p => p.aportado), borderColor: tema.neutro, backgroundColor: tema.neutro, borderDash: [4, 4], stepped: true },
+          ],
+        },
+        options: { pointRadius: 2, scales: { y: { ticks: { callback: v => tema.eur(v) } } } },
+      });
+    </script>
+  {% endif %}
+
+  <section class="plegable">
+    <details>
+    <summary><h2>Aportaciones</h2><span class="resumen">{{ m.aportaciones|length }} · {{ m.aportado|eur }}</span></summary>
+    <table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Importe</th></tr></thead>
+      <tbody>
+        {% for a in m.aportaciones %}
+          <tr><td>{{ a.fecha.strftime('%d/%m/%Y') }}</td><td class="muted">{{ a.nota or '' }}</td>
+            <td class="num {{ 'negative' if a.importe < 0 }}">{{ a.importe|float|eur }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </details>
+  </section>
+  {% else %}
+    <p>Todavía no se ha leído el plan.</p>
+  {% endif %}
+
+  <section>
+    <h2>Actualizar</h2>
+    <p class="muted">La conexión bancaria no da los planes de pensiones: se leen de la web de ING. Se abre Chrome,
+       entras tú (con la confirmación en el móvil) y el resto es automático. La contraseña nunca se guarda.</p>
+    <form method="post" action="/inversiones/plan-ing/actualizar" data-enviando="Abriendo Chrome…">
+      <button type="submit" class="button">Actualizar plan</button>
+    </form>
+  </section>
+{% endblock %}

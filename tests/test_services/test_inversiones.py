@@ -73,3 +73,26 @@ def test_pias_lee_portada_y_extracto():
     assert fondo["valor"] == pytest.approx(120.0)  # se ajusta al saldo real
     # valor − aportado = (valor − coste) + realizado
     assert (fondo["valor"] - fondo["coste"]) + fondo["realizado"] == pytest.approx(120.0 - 100.0)
+
+
+def test_plan_ing_aportaciones_y_pendiente_de_valorar():
+    from app.integrations.ing import plan_pensiones as pp
+
+    posicion = {"products": [
+        {"type": "CURRENT_ACCOUNT", "balanceToShow": 10.0, "identifiers": []},
+        {"type": "PENSION", "commercialName": "Plan 2050", "balanceToShow": 330.0, "openingDate": "2019-01-07",
+         "identifiers": [{"type": "LOCAL_UUID", "value": "abc"}]},
+    ]}
+    plan = pp.plan(posicion)
+    assert (plan["nombre"], plan["saldo"], plan["id"]) == ("Plan 2050", 330.0, "abc")
+
+    def mov(uuid, fecha, importe, part, estado="Orden realizada"):
+        return {"uuid": uuid, "operationDate": fecha, "tranCode": "SUSC", "description": "Aportaciones periódicas",
+                "amount": importe, "sharesNumbers": part, "status": estado}
+
+    r = pp.calcular(330.0, [mov("1", "10/01/2026", 100, 10), mov("2", "10/02/2026", 200, 18),
+                            mov("3", "10/03/2026", 125, 0, "Correcta. Cargada en cuenta. Pendiente valoración")])
+    assert sum(a["importe"] for a in r["aportaciones"]) == 425
+    plan_pos, pendiente = r["posiciones"]
+    assert (plan_pos["cantidad"], plan_pos["coste"], plan_pos["valor"]) == (28, 300, 330.0)
+    assert (pendiente["symbol"], pendiente["valor"]) == ("EUR", 125)  # cargada pero aún sin participaciones

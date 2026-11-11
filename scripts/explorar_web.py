@@ -1,27 +1,39 @@
-"""Sesión de exploración de la banca online de Mediolanum, para automatizar la lectura del PIAS.
+"""Sesión de exploración de una web (banca online, plataforma de inversión) para automatizar
+después su lectura, como se hizo con el PIAS de Mediolanum.
 
-Abre el mismo Chrome que scripts/scrape_mediolanum.py (perfil en secrets/mediolanum_chrome).
-Tú entras y navegas hasta tu PIAS; mientras, se guardan en secrets/mediolanum_exploracion/
+Abre Chrome con un perfil propio por sitio (secrets/<sitio>_chrome; el de mediolanum es el
+mismo que usa scripts/scrape_mediolanum.py). Tú entras y navegas hasta lo que interese;
+mientras, se guardan en secrets/<sitio>_exploracion/
 las respuestas JSON y las páginas HTML que la web recibe del banco, y en trafico.txt la
 lista de peticiones sin imágenes, estilos ni scripts. Nunca lo que tú envías (la contraseña
 no se captura) y las respuestas de login/autenticación se descartan. Sirve para descubrir de qué
-llamada sale el valor del PIAS y sus aportaciones. Cierra el navegador al terminar.
+llamada salen los datos. Cierra el navegador al terminar.
 
 Uso:
-    python scripts/explorar_mediolanum.py
+    python scripts/explorar_web.py <sitio> [url de inicio]
+    python scripts/explorar_web.py mediolanum
+    python scripts/explorar_web.py ing
 """
 
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import Error, Response, sync_playwright
 
 RAIZ = Path(__file__).resolve().parent.parent
-PERFIL = RAIZ / "secrets" / "mediolanum_chrome"
-SALIDA = RAIZ / "secrets" / "mediolanum_exploracion"
-INICIO = "https://www.bancomediolanum.es/"
+INICIOS = {
+    "mediolanum": "https://www.bancomediolanum.es/",
+    "ing": "https://www.ing.es/",
+}
+SITIO = sys.argv[1] if len(sys.argv) > 1 else "mediolanum"
+INICIO = sys.argv[2] if len(sys.argv) > 2 else INICIOS[SITIO]
+PERFIL = RAIZ / "secrets" / f"{SITIO}_chrome"
+SALIDA = RAIZ / "secrets" / f"{SITIO}_exploracion"
+# Analítica y publicidad: ruido que no lleva datos tuyos útiles.
+RUIDO = re.compile(r"doubleclick|google|cookiebot|clarity\.ms|facebook|hotjar|adobe|demdex|omtrdc|tealium|criteo|bing\.com|/rb_", re.I)
 ESPERA_MAX_MS = 20 * 60 * 1000
 ESTATICOS = {"image", "stylesheet", "font", "media", "script"}
 EXCLUIR = re.compile(r"login|logon|auth|token|password|credential|otp|sso", re.I)
@@ -38,6 +50,8 @@ def main() -> None:
         if tipo in ESTATICOS:
             return
         url = resp.url
+        if RUIDO.search(url):
+            return
         contenido = resp.headers.get("content-type") or ""
         _apuntar(f"{resp.status} {resp.request.method} {tipo} {contenido.split(';')[0]} {url}")
         if EXCLUIR.search(url) or not ("json" in contenido or "html" in contenido or "xml" in contenido):
@@ -58,7 +72,7 @@ def main() -> None:
         contexto.on("response", al_responder)
         pagina = contexto.pages[0] if contexto.pages else contexto.new_page()
         pagina.goto(INICIO)
-        print("Entra en tu banca online y ve hasta tu PIAS (valor, aportaciones, movimientos).", flush=True)
+        print(f"Entra en {SITIO} y ve hasta lo que quieras automatizar (valor, aportaciones, movimientos).", flush=True)
         print("Cuando hayas visto todo, cierra el navegador.", flush=True)
         # Sigue mientras quede alguna pestaña: cerrar la primera no termina la sesión.
         espera = 0

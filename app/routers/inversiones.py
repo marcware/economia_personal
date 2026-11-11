@@ -10,6 +10,7 @@ from app.database import get_db
 from app.integrations import plataformas
 from app.integrations.bit2me import client as bit2me_client
 from app.integrations.bit2me import sync_service as bit2me_sync
+from app.integrations.ing import plan_pensiones
 from app.integrations.mediolanum import pias
 from app.integrations.traderepublic import client as tr_client
 from app.integrations.traderepublic import sync_service as tr_sync
@@ -116,7 +117,6 @@ def traderepublic_confirmar(request: Request, codigo: str = Form(""), db: Sessio
 # --- PIAS Mediolanum: sin API; se lee al entrar en su banca con scripts/scrape_mediolanum.py ---
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
-REGISTRO_PIAS = RAIZ / "secrets" / "mediolanum_pias.log"
 
 
 def _pagina_pias(request: Request, db: Session, **extra) -> HTMLResponse:
@@ -132,13 +132,36 @@ def pias_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     return _pagina_pias(request, db)
 
 
+def _lanzar(script: str, *args: str) -> None:
+    """Abre en el escritorio (la app corre en este ordenador) un script que trae Chrome: el
+    login es del usuario y el resto se hace solo. Su salida queda en secrets/<script>.log."""
+    with (RAIZ / "secrets" / f"{Path(script).stem}.log").open("w") as registro:
+        subprocess.Popen([sys.executable, str(RAIZ / "scripts" / script), *args], cwd=RAIZ,
+                         stdout=registro, stderr=subprocess.STDOUT, start_new_session=True)
+
+
 @router.post("/pias/actualizar", response_class=HTMLResponse)
 def pias_actualizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    """Abre el Chrome de Mediolanum en el escritorio (la app corre en este ordenador). El
-    login es del usuario; el PIAS se lee solo al entrar y el navegador se cierra."""
-    with REGISTRO_PIAS.open("w") as registro:
-        subprocess.Popen(
-            [sys.executable, str(RAIZ / "scripts" / "scrape_mediolanum.py"), "--solo-pias"],
-            cwd=RAIZ, stdout=registro, stderr=subprocess.STDOUT, start_new_session=True,
-        )
+    _lanzar("scrape_mediolanum.py", "--solo-pias")
     return _pagina_pias(request, db, lanzado=True)
+
+
+# --- Plan de pensiones ING: sin API para planes; se lee de su web con scripts/scrape_ing.py ---
+
+@router.get("/plan-ing", response_class=HTMLResponse)
+def plan_ing_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return _pagina_plan_ing(request, db)
+
+
+@router.post("/plan-ing/actualizar", response_class=HTMLResponse)
+def plan_ing_actualizar(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    _lanzar("scrape_ing.py")
+    return _pagina_plan_ing(request, db, lanzado=True)
+
+
+def _pagina_plan_ing(request: Request, db: Session, **extra) -> HTMLResponse:
+    inv = plan_pensiones.inversion(db)
+    db.commit()
+    return templates.TemplateResponse(request, "inversiones_plan_ing.html", {
+        "m": inversiones_service.modulo(db, inv), **extra,
+    })

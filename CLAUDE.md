@@ -80,8 +80,8 @@ outside the platform, from its API or entered by hand) and its value as the late
 whose `name` equals `Inversion.nombre` — so `/patrimonio` sums it with no special case and lists only the
 remaining (non-investment) declared assets. `/inversiones`
 ([inversiones_service.py](app/services/inversiones_service.py)) is the overview; each platform gets its
-own module page, built one at a time (so far `/inversiones/bit2me`, `/inversiones/trade-republic` and
-`/inversiones/pias`; the rest show "módulo pendiente"). Platforms with an API are listed once in
+own module page, built one at a time (so far `/inversiones/bit2me`, `/inversiones/trade-republic`,
+`/inversiones/pias` and `/inversiones/plan-ing`; the rest show "módulo pendiente"). Platforms with an API are listed once in
 [app/integrations/plataformas.py](app/integrations/plataformas.py), which `/conexiones`, `/inversiones`
 and `scripts/sync_accounts.py` iterate; each keeps per-asset snapshots in `Posicion` (filtered by
 `inversion_id`; cash is the `"EUR"` row) and its total as a `ManualAssetEntry`. `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
@@ -122,6 +122,18 @@ is the extract (requested year by year back to the start) and `a=2407` the portf
 the SUSCRIPCION rows (what reaches the funds, already net of entry charges); "Gastos de admón." are
 paid in units and kept as a realized loss per fund; "ABONO FIDELIDAD" units come free. It is not in
 `plataformas.py`: it needs the user's login, so it never runs on its own.
+
+The ING pension plan ([app/integrations/ing/plan_pensiones.py](app/integrations/ing/plan_pensiones.py))
+isn't in the PSD2 data either. `scripts/scrape_ing.py` opens Chrome (profile `secrets/ing_chrome`), the
+user logs in, and the SPA's own call to `api.ing.ingdirect.es/position-keeping` is captured (the plan is
+the `PENSION` product: balance and `LOCAL_UUID`); then `/genoma_api/rest/products/<id>/movements` is
+fetched from inside the page so it rides the user's session. A contribution "pendiente de valoración"
+has been charged but has no units yet — it's kept as a pending `"EUR"` position, not as a loss. The
+same position-keeping response also has the Cuenta Naranja balance and the mortgage's outstanding
+capital (not used yet).
+
+New sites are mapped first with `scripts/explorar_web.py <sitio>`, which records
+what the site receives (never what's sent) into `secrets/<sitio>_exploracion/`.
 
 ## Architecture
 
