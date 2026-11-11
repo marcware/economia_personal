@@ -107,11 +107,20 @@ def callback(request: Request, code: str | None = None, error: str | None = None
     )
     db.add(connection)
 
-    for acc in session_data.get("accounts", []):
+    cuentas_sesion = session_data.get("accounts", [])
+    # Una cuenta que hasta ahora se importaba a mano (Mediolanum desde XLS) se enlaza en vez de
+    # duplicarse, pero solo si no hay ambigüedad: una cuenta en la sesión y una manual del banco.
+    manuales = db.query(Account).filter_by(bank=bank_enum, external_account_id=None, iban=None).all()
+    manual = manuales[0] if len(cuentas_sesion) == 1 and len(manuales) == 1 else None
+
+    for acc in cuentas_sesion:
         identification_hash = acc.get("identification_hash")
         existing = None
         if identification_hash:
             existing = db.query(Account).filter_by(identification_hash=identification_hash).one_or_none()
+        if existing is None and manual is not None:
+            existing = manual
+            existing.identification_hash = identification_hash
 
         iban = (acc.get("account_id") or {}).get("iban")
         name = acc.get("name") or iban or "Cuenta"

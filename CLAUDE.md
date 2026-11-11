@@ -63,11 +63,15 @@ must be renewed roughly every 90 days per PSD2. The connect/callback flow lives 
 sync in [app/integrations/enablebanking/sync_service.py](app/integrations/enablebanking/sync_service.py)
 (`sync_all`, shared by `scripts/sync_accounts.py` and the "Sincronizar ahora" button on `/conexiones`).
 
-Banco Mediolanum has no Enable Banking coverage, so its movements are imported manually from an XLS
-export via [app/importers/mediolanum.py](app/importers/mediolanum.py) and
+Banco Mediolanum is listed by Enable Banking only as a beta connector that answers `server_error`, so
+its movements come from an XLS export via [app/importers/mediolanum.py](app/importers/mediolanum.py) and
 [scripts/import_mediolanum.py](scripts/import_mediolanum.py) (idempotent — re-importing the same file
-doesn't duplicate transactions). Low volume (a handful of movements), so this stays manual rather than
-built out further.
+doesn't duplicate transactions). [scripts/scrape_mediolanum.py](scripts/scrape_mediolanum.py) is the
+semi-automatic way to get that file: Playwright opens the system Chrome with a persistent profile in
+`secrets/mediolanum_chrome`, the user logs in (confirmation in the bank's app) and downloads the extract,
+and the script saves it to `data/mediolanum/` and imports it. Never store the bank password. If the
+Enable Banking connector ever works, the callback links the session to the existing manual Mediolanum
+account and `sync_account` skips movements already imported by hand (same day and amount).
 
 Bit2Me (crypto) and Quanloop (P2P lending) aren't transactional accounts in this app at all — they're
 tracked as net-worth snapshots via `/patrimonio`'s "Inversiones declaradas" form

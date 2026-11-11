@@ -185,3 +185,44 @@ def test_dinero_de_paso_no_es_gasto_y_se_ve_su_saldo(db, categoria, movimiento):
     assert budget_service.dinero_de_paso(db, 2026, 9)["saldo"] == pytest.approx(-50.0)
     assert octubre["saldo_año"] == pytest.approx(-0.80)
     assert budget_service.dinero_de_paso(db, 2027, 1) is None
+
+
+def test_enlazar_por_api_no_duplica_lo_importado_a_mano(db, movimiento):
+    from app.integrations.enablebanking import sync_service
+    from app.models import TransactionSource
+
+    mediolanum = Account(bank=Bank.MEDIOLANUM, name="Mediolanum", external_account_id="uid-1")
+    db.add(mediolanum)
+    db.commit()
+    tx = movimiento(date(2026, 9, 28), 2858.39, en=mediolanum)  # del XLS, con otra descripción
+    tx.source = TransactionSource.MANUAL
+    db.commit()
+
+    def api(fecha, importe, texto):
+        return {"booking_date": fecha, "credit_debit_indicator": "CRDT" if importe > 0 else "DBIT",
+                "transaction_amount": {"amount": str(abs(importe)), "currency": "EUR"},
+                "remittance_information": [texto]}
+
+    class Respuesta:
+        status_code = 200
+
+        def __init__(self, datos):
+            self.datos = datos
+
+        def json(self):
+            return self.datos
+
+        def raise_for_status(self):
+            pass
+
+    class Cliente:
+        def get(self, ruta, params=None):
+            if ruta.endswith("/balances"):
+                return Respuesta({"balances": []})
+            return Respuesta({"transactions": [
+                api("2026-09-28", 2858.39, "TRANSFERENCIA NOMINA"),
+                api("2026-10-28", 2858.39, "TRANSFERENCIA NOMINA"),
+            ]})
+
+    r = sync_service.sync_account(db, Cliente(), mediolanum)
+    assert (r["inserted"], r["duplicated"]) == (1, 1)

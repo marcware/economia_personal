@@ -110,6 +110,16 @@ def sync_account(
 
     raw_transactions = fetch_all_transactions(client, account.external_account_id, date_from)
 
+    # Movimientos que ya estaban importados a mano (XLS de Mediolanum antes de enlazarla por
+    # API): mismo día e importe, aunque la descripción venga redactada distinta.
+    manuales: dict[tuple, int] = {}
+    for fecha, importe in db.query(Transaction.date, Transaction.amount).filter(
+        Transaction.account_id == account.id,
+        Transaction.source != TransactionSource.API_ENABLEBANKING,
+        Transaction.date >= date_type.fromisoformat(date_from),
+    ):
+        manuales[(fecha, Decimal(importe))] = manuales.get((fecha, Decimal(importe)), 0) + 1
+
     occurrence_counts: dict[tuple, int] = {}
     inserted = 0
     duplicated = 0
@@ -132,6 +142,10 @@ def sync_account(
         fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
 
         if db.query(Transaction).filter_by(fingerprint=fingerprint).one_or_none() is not None:
+            duplicated += 1
+            continue
+        if manuales.get((tx_date, amount), 0) > 0:
+            manuales[(tx_date, amount)] -= 1
             duplicated += 1
             continue
 
