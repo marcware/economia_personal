@@ -73,4 +73,32 @@
       </tbody>
     </table>
   </section>
+
+  <section class="plegable">
+    <details>
+    <summary><h2>Comparado con el banco</h2>
+      <span class="resumen">{{ conciliacion|sum(attribute='gastos')|eur }} en gastos antes de invertir
+        {%- set n = namespace(v=0) %}{% for r in conciliacion %}{% set n.v = n.v + r.solo_banco|length + r.sin_categorizar|length %}{% endfor %}
+        {%- if n.v %} · {{ n.v }} movimientos por revisar{% endif %}</span></summary>
+    <p class="muted">Lo que salió de tus cuentas hacia cada plataforma frente a lo que la plataforma dice haber recibido,
+       desde que el banco está conectado. El detalle está en cada módulo.</p>
+    <table>
+      <thead><tr><th>Inversión</th><th class="num">Salió del banco</th><th class="num">Llegó</th><th class="num">Gastos</th><th>Por revisar</th></tr></thead>
+      <tbody>
+        {% for r in conciliacion %}
+          {% set modulo = (c.filas|selectattr('id', 'equalto', r.inversion.id)|first).modulo %}
+          <tr>
+            <td>{% if modulo %}<a href="{{ modulo }}">{{ r.inversion.nombre }}</a>{% else %}{{ r.inversion.nombre }}{% endif %}
+              {% if r.desde and r.casados %}<span class="nota">desde {{ r.desde.strftime('%m/%Y') }}</span>{% endif %}</td>
+            <td class="num">{{ r.pagado|eur }}</td>
+            <td class="num">{{ r.recibido|eur }}</td>
+            <td class="num">{% if r.gastos > 0.005 %}<span class="negative">{{ r.gastos|eur }}</span> <span class="nota">{{ r.gastos_pct|numero(1) }} %</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if r.solo_banco %}<span class="tag">{{ r.solo_banco|length }} sin llegada</span> {% endif %}
+                {% if r.sin_categorizar %}<span class="tag">{{ r.sin_categorizar|length }} sin categorizar</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </details>
+  </section>
 {% endblock %}

@@ -81,6 +81,22 @@
     </script>
   {% endif %}
 
+  {% include "_conciliacion.html" %}
+
+  {% if historico %}
+  <section>
+    <h2>Gastos de entrada en toda la póliza (estimación)</h2>
+    <p>El banco solo llega a {{ conc.desde.strftime('%m/%Y') }}. Si en cada prima anterior se quedó el mismo
+       {{ conc.gastos_pct|numero(1) }} %, desde el principio habrías pagado <strong>{{ historico.pagado|eur }}</strong>
+       para que llegaran {{ m.aportado|eur }} a los fondos: unos <strong class="negative">{{ historico.gastos|eur }}</strong> en
+       gastos de entrada, además de los {{ gastos|eur }} de administración.</p>
+    <p>Medido sobre lo que salió de tu bolsillo ganas {{ historico.ganancia|eur }}{% if historico.tir is not none %},
+       un <strong>{{ historico.tir|numero(1) }} % al año</strong> (frente al {{ m.tir|numero(1) }} % sobre lo que llegó a los fondos){% endif %}.</p>
+    <p class="muted">Las primas del primer año llegan muy recortadas a los fondos: es la comisión inicial. Según Mediolanum, cada 5 años reinvierte esa parte si se respeta el plan de
+       primas; si eso ocurre, esta estimación se queda corta en esas primas pero la comisión inicial acabaría siendo 0 %.</p>
+  </section>
+  {% endif %}
+
   <section class="plegable">
     <details>
     <summary><h2>Dinero metido</h2><span class="resumen">{{ m.aportaciones|length }} aportaciones · {{ m.aportado|eur }}</span></summary>

@@ -92,6 +92,8 @@
     </script>
   {% endif %}
 
+  {% include "_conciliacion.html" %}
+
   <section class="plegable">
     <details>
     <summary><h2>Dinero metido</h2><span class="resumen">{{ m.aportaciones|length }} movimiento{{ "s" if m.aportaciones|length != 1 }} · {{ m.aportado|eur }}</span></summary>

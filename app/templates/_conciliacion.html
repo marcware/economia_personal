@@ -1,0 +1,53 @@
+{# Comparación de una inversión con el banco. Espera `conc` (conciliacion_service.conciliar). #}
+{% set descuadres = conc.solo_banco|length + conc.sin_categorizar|length %}
+<section class="plegable">
+  <details{% if descuadres %} open{% endif %}>
+  <summary><h2>Comparado con el banco</h2>
+    <span class="resumen">{% if not conc.inversion.category_id %}sin categoría en el banco
+      {% elif not conc.casados and not descuadres %}sin movimientos en el banco
+      {% else %}{{ conc.casados|length }} cargos casan{% if conc.gastos > 0.005 %} · {{ conc.gastos|eur }} se quedan por el camino{% else %} · llega todo{% endif %}{% if descuadres %} · {{ descuadres }} por revisar{% endif %}{% endif %}</span></summary>
+
+  {% if conc.casados %}
+  <p class="muted">Desde {{ conc.desde.strftime('%d/%m/%Y') }}, que es desde cuando hay movimientos del banco: salió de tus cuentas
+     <strong>{{ conc.pagado|eur }}</strong> y la plataforma recibió <strong>{{ conc.recibido|eur }}</strong>.
+     {% if conc.gastos > 0.005 %}La diferencia, <strong>{{ conc.gastos|eur }} ({{ conc.gastos_pct|numero(1) }} %)</strong>, son gastos
+     que se cobran antes de invertir.{% else %}No se pierde nada por el camino.{% endif %}
+     Lo aportado y la ganancia de arriba son los de la plataforma.</p>
+  {% endif %}
+
+  {% if conc.solo_banco %}
+    <p class="advice advice-warning">{{ conc.solo_banco|length }} cargo{{ "s" if conc.solo_banco|length != 1 }} del banco en esta categoría
+      ({{ conc.solo_banco|sum(attribute='importe')|eur }}) sin llegada en la plataforma: o están mal categorizados o el dinero
+      fue a otro sitio.</p>
+  {% endif %}
+  {% if conc.sin_categorizar %}
+    <form method="post" action="/inversiones/{{ conc.inversion.id }}/categorizar" class="advice advice-info"
+          data-aviso="Movimientos categorizados" data-enviando="Categorizando…">
+      {{ conc.sin_categorizar|length }} ingreso{{ "s" if conc.sin_categorizar|length != 1 }} de la plataforma
+      ({{ conc.sin_categorizar|sum(attribute='importe')|eur }}) casan con cargos <strong>sin categorizar</strong> en el banco.
+      <button type="submit" class="button-sm">Categorizarlos como {{ conc.inversion.nombre }}</button>
+    </form>
+  {% endif %}
+
+  {% if conc.casados or conc.solo_banco or conc.sin_categorizar %}
+  <table>
+    <thead><tr><th>Fecha</th><th>En el banco</th><th class="num">Salió</th><th class="num">Llegó</th><th class="num">Diferencia</th></tr></thead>
+    <tbody>
+      {% for s in conc.solo_banco %}
+        <tr><td>{{ s.fecha.strftime('%d/%m/%Y') }}</td><td>{{ s.concepto }}</td><td class="num">{{ s.importe|eur }}</td>
+          <td class="num"><span class="tag">no llega</span></td><td></td></tr>
+      {% endfor %}
+      {% for s in conc.sin_categorizar %}
+        <tr><td>{{ s.candidato.date.strftime('%d/%m/%Y') }}</td><td>{{ s.candidato.description_raw }} <span class="tag">sin categorizar</span></td>
+          <td class="num">{{ (-s.candidato.amount)|float|eur }}</td><td class="num">{{ s.importe|eur }}</td><td></td></tr>
+      {% endfor %}
+      {% for c in conc.casados|reverse %}
+        <tr><td>{{ c.fecha.strftime('%d/%m/%Y') }}</td><td class="muted">{{ c.concepto }}</td><td class="num">{{ c.banco|eur }}</td>
+          <td class="num">{{ c.plataforma|eur }}</td>
+          <td class="num {{ 'negative' if c.diferencia > 0.005 }}">{% if c.diferencia|abs > 0.005 %}{{ (-c.diferencia)|eur }}{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  </details>
+</section>

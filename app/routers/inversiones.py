@@ -16,7 +16,7 @@ from app.integrations.quanloop import cuenta as quanloop
 from app.integrations.traderepublic import client as tr_client
 from app.integrations.traderepublic import sync_service as tr_sync
 from app.models import Inversion, ManualAssetEntry
-from app.services import inversiones_service
+from app.services import conciliacion_service, inversiones_service
 from app.templating import templates
 
 router = APIRouter(prefix="/inversiones", tags=["inversiones"])
@@ -29,6 +29,7 @@ def inversiones_home(request: Request, db: Session = Depends(get_db)) -> HTMLRes
     errores = plataformas.sincronizar_si_toca(db)
     return templates.TemplateResponse(request, "inversiones.html", {
         "cartera": inversiones_service.cartera(db),
+        "conciliacion": conciliacion_service.conciliar_todas(db),
         "errores": errores,
     })
 
@@ -43,11 +44,22 @@ def actualizar_valor(name: str = Form(...), value: float = Form(...), db: Sessio
     return RedirectResponse("/inversiones", status_code=302)
 
 
+@router.post("/{inversion_id}/categorizar")
+def categorizar_pendientes(inversion_id: int, request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+    """Categoriza los cargos del banco que casan con aportaciones de la plataforma."""
+    inv = db.get(Inversion, inversion_id)
+    if inv is None:
+        raise HTTPException(status_code=404, detail="Inversión no reconocida")
+    conciliacion_service.categorizar_pendientes(db, inv)
+    return RedirectResponse(request.headers.get("referer") or "/inversiones", status_code=302)
+
+
 def _pagina_bit2me(request: Request, db: Session, resultado: dict | None) -> HTMLResponse:
     inv = bit2me_sync.inversion(db)
     db.commit()
     return templates.TemplateResponse(request, "inversiones_bit2me.html", {
         "m": inversiones_service.modulo(db, inv),
+        "conc": conciliacion_service.conciliar(db, inv),
         "api": bit2me_client.configurado(),
         "resultado": resultado,
     })
@@ -73,6 +85,7 @@ def _pagina_tr(request: Request, db: Session, resultado: dict | None = None, **e
     db.commit()
     return templates.TemplateResponse(request, "inversiones_traderepublic.html", {
         "m": inversiones_service.modulo(db, inv),
+        "conc": conciliacion_service.conciliar(db, inv),
         "configurado": tr_client.configurado(),
         "sesion": tr_client.sesion_activa(),
         "resultado": resultado,
@@ -123,8 +136,12 @@ RAIZ = Path(__file__).resolve().parent.parent.parent
 def _pagina_pias(request: Request, db: Session, **extra) -> HTMLResponse:
     inv = pias.inversion(db)
     db.commit()
+    m, conc = inversiones_service.modulo(db, inv), conciliacion_service.conciliar(db, inv)
     return templates.TemplateResponse(request, "inversiones_pias.html", {
-        "m": inversiones_service.modulo(db, inv), **extra,
+        "m": m,
+        "conc": conc,
+        "historico": conciliacion_service.estimar_historico(db, inv, conc, m["valor"]),
+        **extra,
     })
 
 
@@ -164,7 +181,9 @@ def _pagina_plan_ing(request: Request, db: Session, **extra) -> HTMLResponse:
     inv = plan_pensiones.inversion(db)
     db.commit()
     return templates.TemplateResponse(request, "inversiones_plan_ing.html", {
-        "m": inversiones_service.modulo(db, inv), **extra,
+        "m": inversiones_service.modulo(db, inv),
+        "conc": conciliacion_service.conciliar(db, inv),
+        **extra,
     })
 
 
@@ -185,5 +204,7 @@ def _pagina_quanloop(request: Request, db: Session, **extra) -> HTMLResponse:
     inv = quanloop.inversion(db)
     db.commit()
     return templates.TemplateResponse(request, "inversiones_quanloop.html", {
-        "m": inversiones_service.modulo(db, inv), **extra,
+        "m": inversiones_service.modulo(db, inv),
+        "conc": conciliacion_service.conciliar(db, inv),
+        **extra,
     })

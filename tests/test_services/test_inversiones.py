@@ -130,3 +130,36 @@ def test_tir_anual():
     # Lo metido hace poco pesa menos: mismo +10 € de ganancia, pero la mitad entró hace un año.
     assert tir([(date(2024, 1, 1), 50.0), (date(2025, 1, 1), 50.0)], 110.0, hoy) > 5.0
     assert tir([(date(2025, 11, 1), 100.0)], 99.0, hoy) is None  # menos de un año: no se anualiza
+
+
+def test_comparacion_con_el_banco(db, movimiento, categoria):
+    from app.models import BudgetGroup
+    from app.services import conciliacion_service
+
+    cat = categoria("PIAS", BudgetGroup.AHORRO)
+    gasto = categoria("Bizum", BudgetGroup.DESEO)
+    pias = Inversion(nombre="PIAS", proveedor="mediolanum", category_id=cat.id)
+    db.add(pias)
+    db.flush()
+    movimiento(date(2026, 1, 1), -10.0, gasto)  # el banco empieza aquí
+    # Prima de 178,96 € que llega partida en dos fondos (6,6 % se queda por el camino).
+    movimiento(date(2026, 2, 3), -178.96, cat)
+    db.add_all([Aportacion(inversion_id=pias.id, fecha=date(2026, 2, 3), importe=165.47),
+                Aportacion(inversion_id=pias.id, fecha=date(2026, 2, 3), importe=1.67)])
+    movimiento(date(2026, 3, 16), -50.0, cat)  # cargo que nunca llega
+    # Llega a la plataforma, pero el cargo está sin categorizar (y un Bizum del mismo importe no vale).
+    movimiento(date(2026, 4, 2), -167.14, gasto)
+    sin_categoria = movimiento(date(2026, 4, 3), -167.14)
+    db.add(Aportacion(inversion_id=pias.id, fecha=date(2026, 4, 5), importe=167.14))
+    db.add(Aportacion(inversion_id=pias.id, fecha=date(2025, 6, 1), importe=100))  # antes del banco: no cuenta
+    db.commit()
+
+    r = conciliacion_service.conciliar(db, pias)
+    assert r["desde"] == date(2026, 1, 1)
+    assert (r["pagado"], r["recibido"], r["gastos"]) == (178.96, 167.14, 11.82)
+    assert [s["importe"] for s in r["solo_banco"]] == [50.0]
+    assert [s["candidato"].id for s in r["sin_categorizar"]] == [sin_categoria.id]
+
+    assert conciliacion_service.categorizar_pendientes(db, pias) == 1
+    assert sin_categoria.category_id == cat.id and sin_categoria.manually_categorized
+    assert conciliacion_service.conciliar(db, pias)["recibido"] == pytest.approx(334.28)

@@ -85,8 +85,15 @@ own module page, built one at a time (so far `/inversiones/bit2me`, `/inversione
 [app/integrations/plataformas.py](app/integrations/plataformas.py), which `/conexiones`, `/inversiones`
 and `scripts/sync_accounts.py` iterate; each keeps per-asset snapshots in `Posicion` (filtered by
 `inversion_id`; cash is the `"EUR"` row) and its total as a `ManualAssetEntry`. `Inversion.category_id` points to the bank's "Inversión" subcategory for that investment,
-kept only for a later step that compares the platform's own figures with the bank transfers — don't
-compute anything in the investment pages from `Transaction`.
+used only by [conciliacion_service.py](app/services/conciliacion_service.py), the "Comparado con el banco"
+section of `/inversiones` and of each module: bank charges in that category vs the platform's
+aportaciones, both summed per day (a PIAS premium arrives split by fund; two card payments can arrive
+as one deposit) and paired within `DIAS` and `TOLERANCIA`. The difference on paired ones is money lost
+before investing (the PIAS entry charge, ~6.6 %); unpaired platform deposits are matched to an
+*uncategorized* charge of the same amount, which a button can file under the investment. That's the
+only place the investment pages read `Transaction` — aportado, value and gain always come from the
+platform. Returns are shown both as % over aportado and as an annual TIR
+(`inversiones_service.tir`, not given under `DIAS_MIN_TIR` days of history).
 
 Bit2Me ([app/integrations/bit2me/](app/integrations/bit2me/), read-only key in `.env` as
 `BIT2ME_API_KEY`/`BIT2ME_API_SECRET`): requests are signed `base64(HMAC-SHA512(secret,
