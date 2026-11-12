@@ -55,8 +55,11 @@ def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
         request,
         "home.html",
         {"d": disponible_service.disponible(db, hoy), "pendientes": pendientes_service.pendientes(db),
-         "traspasos": dinero_service.mi_dinero(db, hoy)["traspasos"],
-         "consejos": get_advice(db, hoy.year, hoy.month)[:3]},
+         # Llenar el fondo de emergencia no corre prisa: ese traspaso solo sale en Mi patrimonio.
+         "traspasos": [t for t in dinero_service.mi_dinero(db, hoy)["traspasos"] if t["rol"] != "NOMINA"],
+         # Presupuestos superados e hitos ya están en "Qué hacer".
+         "consejos": [a for a in get_advice(db, hoy.year, hoy.month)
+                      if a.type not in ("presupuesto_categoria", "hito")][:3]},
     )
 
 

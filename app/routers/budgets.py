@@ -41,7 +41,6 @@ def presupuestos_home(
     balance = budget_service.balance_mes(db, year, month, resumen, huchas["cuota"]) if tiene_presupuestos else None
     hitos = goal_service.goal_rows(db, year, month)
     ajustes = budget_service.ajustes_automaticos(db, year, month)
-    gastos_anuales = budget_service.gastos_anuales(db, year)
 
     con_presupuesto = {f["budget"].category_id for f in resumen["filas"] if f["budget"] is not None}
     categorias_disponibles = [
@@ -70,7 +69,6 @@ def presupuestos_home(
             "consumo_medio": libertad_service.medias_mensuales(db)["consumo"],
             "hitos": hitos,
             "ajustes": ajustes,
-            "gastos_anuales": gastos_anuales,
             "paso": budget_service.dinero_de_paso(db, year, month),
             "categorias_disponibles": categorias_disponibles,
             "settings": settings,

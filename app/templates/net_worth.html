@@ -9,7 +9,7 @@
       <div class="card-value {{ 'positive' if summary.net_worth >= 0 else 'negative' }}">
         {{ summary.net_worth|eur }}
       </div>
-      <div class="card-sub">cuentas + inversiones − deudas</div>
+      <div class="card-sub">cuentas + inversiones − deudas{% if not otros_activos %} (la casa no está sumada: añádela abajo){% endif %}</div>
     </div>
     <div class="card">
       <div class="card-label">Cuentas</div>
@@ -99,7 +99,7 @@
       <input type="text" name="name" placeholder="Nombre (p.ej. Cuenta de ahorro)" required>
       <input type="number" step="0.01" name="value" placeholder="Valor actual (€)" required>
       <label class="checkbox-label"><input type="checkbox" name="liquido" value="true">
-        Líquido (colchón: se puede sacar en días sin perder dinero)</label>
+        Líquido (fondo de emergencia: se puede sacar en días sin perder dinero)</label>
       <button type="submit" class="button-sm">Añadir</button>
     </form>
     </details>
@@ -137,16 +137,18 @@
   </section>
 
   {% set l = libertad %}
-  <section>
-    <h2>🧭 Camino a la libertad financiera</h2>
-    <p class="muted">{% if l.plan %}Según el presupuesto de {{ l.plan.nombre }}, lo que viene; al lado,
+  <section class="plegable">
+    <details>
+    <summary><h2>🧭 Camino a la libertad financiera</h2>
+      <span class="resumen">fondo de emergencia {% if l.meses_colchon is not none %}{{ l.meses_colchon|numero(1) }} meses{% else %}—{% endif %}{% if l.tasa_ahorro is not none %} · ahorras el {{ "%.0f"|format(l.tasa_ahorro) }} %{% endif %}</span></summary>
+    <p class="muted">{% if l.plan %}Según tu presupuesto (lo que planeas); al lado,
        lo que pasó de verdad los últimos {{ l.meses_media }} meses.{% else %}Medias de los últimos
        {{ l.meses_media }} meses cerrados.{% endif %} El orden importa:
-       primero el colchón, después fuera la deuda cara, después invertir cada vez más.</p>
+       primero el fondo de emergencia, después fuera la deuda cara, después invertir cada vez más.</p>
 
     <div class="cards">
       <div class="card">
-        <div class="card-label">1 · Colchón de emergencia</div>
+        <div class="card-label">1 · Fondo de emergencia</div>
         <div class="card-value {{ 'positive' if l.meses_colchon and l.meses_colchon >= l.meses_colchon_objetivo else 'negative' }}">
           {% if l.meses_colchon is not none %}{{ l.meses_colchon|numero(1) }} meses{% else %}—{% endif %}
         </div>
@@ -194,5 +196,6 @@
     <p class="muted">Suponiendo un {{ "%.0f"|format(l.rentabilidad_real) }} % anual por encima de la inflación
        (orientativo para una cartera indexada global a largo plazo; no es una garantía).
        Bajar el gasto acerca la meta por los dos lados: sube lo que inviertes y baja la cifra objetivo.</p>
+    </details>
   </section>
 {% endblock %}

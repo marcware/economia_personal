@@ -219,7 +219,10 @@ Layout is a standard layered FastAPI app under `app/`:
   plus the Cuenta Naranja for the huchas. Each gets what it should hold (rest of the cycle's variable
   budget, pending fixed costs and investment, 6 months of the budget's NECESIDAD plus annual bills, the
   huchas' `inicial`) and the page lists the transfers that put everything in place, from AHORRO first.
-  Once accounts have roles, the home's "libre" only looks at DIA + RECIBOS. Mediolanum's balance is the
+  Once accounts have roles, the home's "libre" only looks at DIA + RECIBOS, and while the Cuenta Naranja
+  is below its target the cycle's huchas quota rides in the same transfer from AHORRO
+  (`huchas_desde_ahorro`) instead of being reserved from the day-to-day accounts. Hoy's "Qué hacer" lists
+  those transfers except the one filling the emergency fund (not urgent; it stays on `/patrimonio`). Mediolanum's balance is the
   last imported extract's (`scripts/import_mediolanum.py` stores it as a declared asset).
   [pendientes_service.py](app/services/pendientes_service.py) builds the short "Pendiente" strip on the
   home page (budgets exceeded, hitos at risk, recent uncategorized movements, bank consent about to

@@ -158,7 +158,8 @@
     <div class="card{{ ' card-hero' if pasado <= 0 }}">
       <div class="card-label">{{ 'Te has pasado' if pasado > 0 else 'Te queda' }}</div>
       <div class="card-value {{ 'negative' if pasado > 0 else 'positive' }}">{{ pasado|abs|eur }}</div>
-      <div class="card-sub">{% if pasado > 0 %}{{ (pasado / v.total_limite * 100)|round|int }} % más de lo que podías{% else %}para lo que queda de mes{% endif %}{% if v.cubierto %}, sin contar lo que paga la hucha{% endif %}</div>
+      <div class="card-sub">{% if pasado > 0 %}{{ (pasado / v.total_limite * 100)|round|int }} % más de lo que podías{% else %}para lo que queda de mes{% endif %}{% if v.cubierto %}, sin contar lo que paga la hucha{% endif %}.
+        Hasta la nómina, mira <a href="/">Hoy</a></div>
     </div>
   </div>
   {% if v.pasadas %}
@@ -229,40 +230,6 @@
       {% endif %}
     </div>
   </div>
-
-  {% if resumen.filas %}
-    {% set n_superados = resumen.filas|selectattr("estado", "equalto", "over")|list|length %}
-    <div class="cards">
-      <div class="card">
-        <div class="card-label">Gastado de lo presupuestado</div>
-        <div class="card-value">{{ resumen.total_gasto|eur }}</div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: {{ [[resumen.ratio_total, 100]|min, 0]|max }}%"></div>
-        </div>
-        <div class="card-sub">{{ resumen.ratio_total|round(0, 'floor')|int }} % de {{ resumen.total_limite|eur }}</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Queda por gastar</div>
-        <div class="card-value {{ 'negative' if resumen.total_restante < 0 }}">{{ resumen.total_restante|eur }}</div>
-        <div class="card-sub">
-          {% if n_superados %}<span class="negative">{{ n_superados }} categoría{{ "s" if n_superados != 1 }} por encima de su límite</span>
-          {% else %}ninguna categoría por encima de su límite{% endif %}
-        </div>
-      </div>
-      {% if balance %}
-        <div class="card">
-          <div class="card-label">Ingresos previstos</div>
-          <div class="card-value">{{ balance.total_ingresos|eur }}</div>
-          <div class="card-sub">el gasto presupuestado es el {{ balance.ratio_gasto|round|int }} %</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Sobra para ahorrar</div>
-          <div class="card-value {{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ balance.sin_asignar|eur }}</div>
-          <div class="card-sub">tras gasto, inversión y huchas</div>
-        </div>
-      {% endif %}
-    </div>
-  {% endif %}
 
   {% if not resumen.filas %}
     <section>
@@ -390,7 +357,7 @@
       <section class="plegable">
         <details>
 <summary><h2>⚖️ ¿Cabe el plan en lo que cobras?</h2><span class="resumen {{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{% if balance.sin_asignar >= 0 %}sí, sobran {{ balance.sin_asignar|eur }}{% else %}no, faltan {{ (-balance.sin_asignar)|eur }}{% endif %}</span></summary>
-        <p class="muted">Los límites de abajo son topes de gasto, no lo que te puedes gastar.
+        <p class="muted">Los límites de arriba son topes de gasto, no lo que te puedes gastar.
            Aquí se ponen al lado de lo que entra. La inversión y las huchas
            no son gasto: es dinero que sigue siendo tuyo, así que salen del margen, no del gasto.</p>
         <table class="ledger">
@@ -402,11 +369,11 @@
             <tr><td>− Fijos (sin la inversión)</td><td>−{{ balance.fijos|eur }}</td></tr>
             <tr><td>− Variables</td><td>−{{ balance.variables|eur }}</td></tr>
             <tr class="total">
-              <th>= Margen</th>
+              <th>= Te queda tras los gastos</th>
               <th class="{{ 'positive' if balance.margen >= 0 else 'negative' }}">{{ balance.margen|eur }}</th>
             </tr>
             <tr class="sub"><td>Inversión (compromiso)</td><td>{{ balance.inversion|eur }}</td></tr>
-            <tr class="sub"><td>Huchas (a la {{ huchas.cuenta }}, ver <a href="#huchas">abajo</a>)</td><td>{{ balance.huchas|eur }}</td></tr>
+            <tr class="sub"><td>Huchas (a la {{ huchas.cuenta }}, ver <a href="#huchas">arriba</a>)</td><td>{{ balance.huchas|eur }}</td></tr>
             <tr class="sub">
               <th>Sobra para ahorrar</th>
               <th class="{{ 'positive' if balance.sin_asignar >= 0 else 'negative' }}">{{ balance.sin_asignar|eur }}</th>
@@ -475,35 +442,6 @@
               {% if paso.saldo_año < 0 %}falta por devolverte{% elif paso.saldo_año > 0 %}te han dado de más{% else %}en paz{% endif %}</td>
             <td class="{{ 'negative' if paso.saldo_año < 0 else 'positive' }}">{{ (paso.saldo_año|abs)|eur }}</td>
           </tr>
-        </tbody>
-      </table>
-    </details>
-</section>
-  {% endif %}
-
-  {% if gastos_anuales %}
-    <section class="plegable">
-      <details>
-<summary><h2>📅 Gastos anuales</h2><span class="resumen">quedan {{ (gastos_anuales|sum(attribute="restante"))|eur(0) }} por pagar este año</span></summary>
-      <p class="muted">Caen en bloque una o dos veces al año (seguros, IBI...), no repartidos cada mes.
-         Si un mes concreto sale caro por uno de estos, es lo esperado, no un sobrecoste.
-         El "estimado anual" sale de tu gasto real de los últimos 12 meses.</p>
-      <table>
-        <thead><tr><th>Categoría</th><th class="num">Gastado en {{ year }}</th><th class="num">Estimado anual</th><th>Queda por gastar</th></tr></thead>
-        <tbody>
-          {% for g in gastos_anuales %}
-            <tr>
-              <td>{{ g.etiqueta }}</td>
-              <td class="num">{{ g.gastado_año|eur }}</td>
-              <td class="num">{{ g.estimado_anual|eur }}</td>
-              <td>
-                {{ g.restante|eur }}
-                {% if g.por_mes_restante %}
-                  <span class="muted">(~{{ g.por_mes_restante|eur }}/mes en lo que queda de año)</span>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
         </tbody>
       </table>
     </details>

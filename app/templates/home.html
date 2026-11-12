@@ -62,7 +62,7 @@
        Hasta que entre, el cálculo sigue en el ciclo anterior.</p>
   {% elif d.dias <= 5 and d.libre > 0 %}
     <p class="advice advice-info">Quedan {{ d.dias }} días para cobrar. Lo que sobre al llegar la nómina,
-       muévelo a inversión o al colchón antes de empezar el mes nuevo: págate primero.</p>
+       muévelo a inversión o al fondo de emergencia antes de empezar el mes nuevo: págate primero.</p>
   {% endif %}
 
   <section class="card">
@@ -93,8 +93,8 @@
               <span class="muted">({{ d.inversion_hecha|eur }} de {{ d.inversion_prevista|eur }} hechos)</span></td>
             <td>{{ d.inversion_pendiente|eur }}</td></tr>
         <tr><td>− Huchas que faltan por pasar a la {{ d.huchas.cuenta }}
-              <span class="muted">({{ d.traspasado_huchas|eur }} de {{ d.huchas.cuota|eur }} pasados)</span></td>
-            <td>{{ d.huchas_pendiente|eur }}</td></tr>
+              <span class="muted">({% if d.huchas_desde_ahorro %}este mes salen del ahorro, con el traspaso de «Qué hacer»{% else %}{{ d.traspasado_huchas|eur }} de {{ d.huchas.cuota|eur }} pasados{% endif %})</span></td>
+            <td>{{ d.huchas_reservado|eur }}</td></tr>
         {% if d.arranque_huchas > 0 %}
         <tr><td>− Para arrancar las huchas, de una vez
               <span class="muted">(en la {{ d.huchas.cuenta }} hay {{ (d.huchas.saldo or 0)|eur }} de {{ d.huchas.objetivo|eur }})</span></td>
@@ -125,7 +125,7 @@
   {% if consejos %}
     <section class="plegable">
       <details>
-      <summary><h2>Consejos</h2><span class="resumen">{{ consejos[0].title }}</span></summary>
+      <summary><h2>Consejos</h2><span class="resumen">{{ consejos|length }} para este mes</span></summary>
       <ul class="advice-list">
         {% for a in consejos %}
           <li class="advice advice-{{ a.severity }}">
@@ -138,6 +138,8 @@
       <p><a href="/consejos">Ver todos los consejos &raquo;</a></p>
       </details>
     </section>
+  {% else %}
+    <p><a href="/consejos">Ver los consejos del mes &raquo;</a></p>
   {% endif %}
 
   <script>
@@ -158,7 +160,7 @@
         var pct = libre > 0 ? importe / libre * 100 : Infinity;
         if (queda < 0) {
           out.className = 'advice advice-danger';
-          out.textContent = 'No llega: te faltarían ' + eur(-queda) + ' y tendrías que tirar del dinero de los recibos, de la inversión o del colchón.';
+          out.textContent = 'No llega: te faltarían ' + eur(-queda) + ' y tendrías que tirar del dinero de los recibos, de la inversión o del fondo de emergencia.';
         } else if (pct > 50) {
           out.className = 'advice advice-warning';
           out.textContent = 'Entra, pero se lleva el ' + pct.toFixed(0) + ' % de lo libre: te quedarían ' + eur(queda) +

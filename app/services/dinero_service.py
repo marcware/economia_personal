@@ -97,8 +97,9 @@ def mi_dinero(db: Session, hoy: date | None = None) -> dict:
         })
     cuentas.append({
         "nombre": f"ING {h['cuenta']}", "rol": "HUCHAS", "trabajo": "Huchas: recibos anuales, viajes e imprevistos",
-        "saldo": h["saldo"], "fecha": h["fecha_saldo"], "objetivo": h["objetivo"],
-        "diferencia": None if h["saldo"] is None else h["saldo"] - h["objetivo"],
+        # Más la cuota de este ciclo si sale del ahorro (disponible_service).
+        "saldo": h["saldo"], "fecha": h["fecha_saldo"], "objetivo": h["objetivo"] + d["huchas_desde_ahorro"],
+        "diferencia": None if h["saldo"] is None else h["saldo"] - h["objetivo"] - d["huchas_desde_ahorro"],
     })
 
     total = sum(c["saldo"] or 0.0 for c in cuentas)
@@ -121,7 +122,8 @@ def mi_dinero(db: Session, hoy: date | None = None) -> dict:
             importe = min(necesita, disponibles[id(origen)])
             if importe >= 1:
                 traspasos.append({"desde": origen["nombre"], "hacia": destino["nombre"],
-                                  "para": destino["trabajo"].split(":")[0].lower(), "importe": round(importe, 2)})
+                                  "para": destino["trabajo"].split(":")[0].lower(), "rol": destino["rol"],
+                                  "importe": round(importe, 2)})
                 disponibles[id(origen)] -= importe
                 necesita -= importe
 

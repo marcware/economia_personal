@@ -247,7 +247,12 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
     # roles de cuenta eso sale de la de ahorro, que no está en el saldo de arriba.
     con_roles = db.query(Account).filter(Account.rol.isnot(None)).first() is not None
     arranque = 0.0 if con_roles else h["falta"]
-    comprometido = total_fijos + total_variables + inversion_pendiente + huchas_pendiente + arranque
+    # Mientras la Cuenta Naranja esté por llenar, la cuota del ciclo va en el mismo traspaso
+    # desde la cuenta de ahorro (dinero_service) y no sale del día a día; una vez llena, sale
+    # de la nómina como un recibo más.
+    huchas_desde_ahorro = huchas_pendiente if con_roles and h["falta"] > 0 else 0.0
+    huchas_reservado = huchas_pendiente - huchas_desde_ahorro
+    comprometido = total_fijos + total_variables + inversion_pendiente + huchas_reservado + arranque
     libre = saldo - comprometido
     dias = max((ciclo["siguiente"] - hoy).days, 1)
 
@@ -273,6 +278,8 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
         "huchas": h,
         "traspasado_huchas": traspasado_huchas,
         "huchas_pendiente": huchas_pendiente,
+        "huchas_desde_ahorro": huchas_desde_ahorro,
+        "huchas_reservado": huchas_reservado,
         "arranque_huchas": arranque,
         "comprometido": comprometido,
         "libre": libre,
