@@ -1,5 +1,13 @@
 """Agregaciones mensuales (pandas) para el dashboard: ingresos, gastos, ahorro
-y desglose por categoría, excluyendo siempre los traspasos entre cuentas propias."""
+y desglose por categoría, excluyendo siempre los traspasos entre cuentas propias.
+
+La nómina que llega a final de mes cuenta en el mes que paga (`mes`), no en el que cae:
+cobrada el 27 de octubre, es la de noviembre. Si no, el mes en curso sale sin ingresos y
+con un "ahorro" de miles en negativo hasta el día 27. El gasto sí va por mes natural, como
+en los presupuestos.
+"""
+
+from datetime import date
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -10,6 +18,9 @@ MONTHS_ES = {
     1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
     7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
 }
+
+# Una nómina cobrada a partir de este día del mes cuenta como ingreso del mes siguiente.
+DIA_NOMINA_ADELANTADA = 20
 
 
 def _load_transactions_df(db: Session) -> pd.DataFrame:
@@ -23,6 +34,12 @@ def _load_transactions_df(db: Session) -> pd.DataFrame:
     df["date"] = pd.to_datetime(df["date"])
     grupos = {c.id: c.budget_group.value for c in db.query(Category).all() if c.budget_group}
     df["budget_group"] = df["category_id"].map(grupos)
+    df["mes"] = df["date"].dt.to_period("M")
+    from app.services.disponible_service import _categoria_nomina  # importa este módulo
+
+    nomina = _categoria_nomina(db, date.today())
+    adelantada = (df["category_id"] == nomina) & (df["amount"] > 0) & (df["date"].dt.day >= DIA_NOMINA_ADELANTADA)
+    df.loc[adelantada, "mes"] = df.loc[adelantada, "mes"] + 1
     return df
 
 
@@ -43,7 +60,7 @@ def available_months(db: Session) -> list[tuple[int, int]]:
     df = _load_transactions_df(db)
     if df.empty:
         return []
-    periods = df["date"].dt.to_period("M").unique()
+    periods = df["mes"].unique()
     return sorted({(p.year, p.month) for p in periods}, reverse=True)
 
 
@@ -68,7 +85,7 @@ def monthly_summary(db: Session, year: int, month: int) -> dict:
     if df.empty:
         return empty
 
-    mask = (df["date"].dt.year == year) & (df["date"].dt.month == month) & (~df["is_transfer"])
+    mask = (df["mes"] == pd.Period(year=year, month=month, freq="M")) & (~df["is_transfer"])
     month_df = df[mask]
     if month_df.empty:
         return empty
@@ -103,11 +120,10 @@ def evolution(db: Session, months: int = 12) -> list[dict]:
     if df.empty:
         return []
     df = df[~df["is_transfer"]].copy()
-    df["period"] = df["date"].dt.to_period("M")
 
     df["ingreso"] = df["amount"].where(_es_ingreso(df), 0.0)
     df["gasto"] = (-df["amount"]).where(_es_gasto(df), 0.0)
-    grouped = df.groupby("period").agg(
+    grouped = df.groupby("mes").agg(
         ingresos=("ingreso", "sum"), gastos=("gasto", "sum")
     ).sort_index().tail(months)
 

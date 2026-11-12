@@ -49,13 +49,30 @@ def check_base(db: Session, year: int, month: int) -> list[Advice]:
         return []
     l = libertad_service.resumen(db)
     advices = []
-    deficit = l["consumo_medio"] - l["ingresos_medios"]
-    if l["ingresos_medios"] > 0 and deficit > 0:
+    real, plan = l["real"], l["plan"]
+    deficit_real = real["consumo"] - real["ingresos"]
+    if plan is not None and plan["consumo"] > plan["ingresos"]:
+        advices.append(Advice(
+            "deficit", "danger", "Tu presupuesto gasta más de lo que ingresas",
+            f"El plan de {plan['nombre']} consume {eur(plan['consumo'], 0)} al mes (con las huchas) y "
+            f"entran {eur(plan['ingresos'], 0)}: {eur(plan['consumo'] - plan['ingresos'], 0)} al mes que "
+            "saldrían del colchón. Es lo primero que hay que cerrar.",
+            f"/presupuestos?year={plan['year']}&month={plan['month']}",
+        ))
+    elif plan is not None and real["ingresos"] > 0 and deficit_real > 0:
+        advices.append(Advice(
+            "deficit", "info", "El plan cuadra; los últimos meses no",
+            f"En los últimos {l['meses_media']} meses cerrados gastaste de media {eur(real['consumo'], 0)} "
+            f"al mes e ingresaste {eur(real['ingresos'], 0)}. El presupuesto de {plan['nombre']} ya cabe "
+            f"(deja {eur(plan['ingresos'] - plan['consumo'], 0)} al mes para invertir y ahorrar): ahora toca cumplirlo.",
+            f"/presupuestos?year={plan['year']}&month={plan['month']}",
+        ))
+    elif plan is None and real["ingresos"] > 0 and deficit_real > 0:
         advices.append(Advice(
             "deficit", "danger", "Gastas más de lo que ingresas",
             f"En los últimos {l['meses_media']} meses cerrados has gastado de media "
-            f"{eur(l['consumo_medio'], 0)} al mes e ingresado {eur(l['ingresos_medios'], 0)}: "
-            f"{eur(deficit, 0)} al mes que salen del colchón o de préstamos. Es lo primero que "
+            f"{eur(real['consumo'], 0)} al mes e ingresado {eur(real['ingresos'], 0)}: "
+            f"{eur(deficit_real, 0)} al mes que salen del colchón o de préstamos. Es lo primero que "
             "hay que cerrar, antes que cualquier presupuesto concreto.",
             "/patrimonio",
         ))

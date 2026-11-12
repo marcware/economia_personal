@@ -7,17 +7,27 @@ Sigue el orden clásico de prioridades de finanzas personales:
   2. Deuda cara fuera (préstamos personales, que cuestan más de lo que rinde invertir).
   3. Invertir de forma automática y creciente: "págate primero".
 
-La cifra de independencia financiera es la regla del 4 %: gasto anual x 25. Todo se
-calcula con medias de los últimos MESES_MEDIA meses naturales cerrados, no del mes en
-curso, para que un mes raro (una compra grande, una paga extra) no mueva el objetivo.
+La cifra de independencia financiera es la regla del 4 %: gasto anual x 25.
+
+Las cifras miran hacia delante: si hay presupuesto, salen del plan (`plan_mensual`: ingresos
+regulares previstos, gasto presupuestado más las huchas, inversión comprometida). Las medias
+de los últimos MESES_MEDIA meses cerrados se dan al lado como lo que pasó de verdad, pero no
+mandan: un préstamo ya liquidado o unas vacaciones seguirían diciendo durante medio año que
+gastas más de lo que ingresas. Sin presupuesto, se usan las medias.
+
+El colchón es el dinero líquido: los valores declarados como líquidos (el saldo de
+Mediolanum) más las cuentas de ahorro sin trabajo asignado (Account.rol AHORRO).
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.advisor.data import load_transactions_df
+from app.models import Account, AccountBalance, Budget, BudgetGroup, RolCuenta
+from app.services import budget_service, disponible_service, huchas_service
+from app.services.dashboard_service import MONTHS_ES
 from app.services.net_worth_service import latest_manual_assets, latest_manual_liabilities
 
 MESES_MEDIA = 6
@@ -83,6 +93,56 @@ def medias_mensuales(db: Session, hoy: date | None = None) -> dict:
     }
 
 
+def mes_del_plan(db: Session, hoy: date | None = None) -> tuple[int, int] | None:
+    """El presupuesto que mira hacia delante: el del mes siguiente al del ciclo de nómina si
+    ya está hecho; si no, el del ciclo en curso. None si ninguno tiene presupuestos."""
+    ciclo = disponible_service.ciclo_nomina(db, hoy)
+    fin = ciclo["siguiente"] - timedelta(days=1)
+    actual = (fin.year, fin.month)
+    siguiente = (actual[0] + actual[1] // 12, actual[1] % 12 + 1)
+    for year, month in (siguiente, actual):
+        if db.query(Budget).filter_by(active=True, year=year, month=month).first():
+            return year, month
+    return None
+
+
+def plan_mensual(db: Session, hoy: date | None = None) -> dict | None:
+    """Un mes según el presupuesto: lo que entra, lo que se consume (topes de gasto más las
+    huchas, que acabarán en recibos y viajes), lo esencial (NECESIDAD más la cuota de recibos
+    anuales) y lo que se invierte."""
+    mes = mes_del_plan(db, hoy)
+    if mes is None:
+        return None
+    year, month = mes
+    h = huchas_service.huchas(db, hoy)
+    balance = budget_service.balance_mes(db, year, month, budget_service.budget_summary(db, year, month), h["cuota"])
+    if balance is None:
+        return None
+    necesidades = sum(float(b.monthly_limit) for b in db.query(Budget).filter_by(active=True, year=year, month=month)
+                      if b.category.budget_group == BudgetGroup.NECESIDAD)
+    return {
+        "year": year, "month": month, "nombre": f"{MONTHS_ES[month].lower()}",
+        "ingresos": balance["total_ingresos"],
+        "consumo": balance["gasto_presupuestado"] + h["cuota"],
+        "necesidades": necesidades + h["huchas"][0]["cuota"],
+        "inversion": balance["inversion"],
+    }
+
+
+def _ahorro_sin_asignar(db: Session) -> float:
+    """Saldo de las cuentas de ahorro sin trabajo asignado: dinero líquido para imprevistos."""
+    total = 0.0
+    for cuenta in db.query(Account).filter(Account.rol == RolCuenta.AHORRO):
+        fila = (db.query(AccountBalance).filter_by(account_id=cuenta.id)
+                .order_by(AccountBalance.recorded_at.desc()).first())
+        total += float(fila.balance) if fila else 0.0
+    return total
+
+
+def _tasa(ingresos: float, consumo: float) -> float | None:
+    return (ingresos - consumo) / ingresos * 100 if ingresos > 0 else None
+
+
 def _es_deuda_de_consumo(nombre: str) -> bool:
     """Las deudas se declaran a mano en /patrimonio; la hipoteca se reconoce por el nombre."""
     return "hipoteca" not in nombre.lower()
@@ -90,24 +150,27 @@ def _es_deuda_de_consumo(nombre: str) -> bool:
 
 def resumen(db: Session, hoy: date | None = None) -> dict:
     medias = medias_mensuales(db, hoy)
-    ingresos, consumo, inversion = medias["ingresos"], medias["consumo"], medias["inversion"]
+    plan = plan_mensual(db, hoy)
+    base = plan or medias
+    ingresos, consumo, inversion, necesidades = base["ingresos"], base["consumo"], base["inversion"], base["necesidades"]
 
     activos = latest_manual_assets(db)
-    colchon = sum(a["value"] for a in activos if a["liquido"])
-    invertido = sum(a["value"] for a in activos if not a["liquido"])
+    colchon = sum(a["value"] for a in activos if a["liquido"]) + _ahorro_sin_asignar(db)
+    # La Cuenta Naranja no es inversión: todo su saldo es de las huchas.
+    invertido = sum(a["value"] for a in activos if not a["liquido"] and a["name"] != huchas_service.ACTIVO)
     deuda_consumo = [d for d in latest_manual_liabilities(db) if _es_deuda_de_consumo(d["name"])]
 
-    meses_colchon = colchon / medias["necesidades"] if medias["necesidades"] > 0 else None
-    objetivo_colchon = medias["necesidades"] * MESES_COLCHON_OBJETIVO
+    meses_colchon = colchon / necesidades if necesidades > 0 else None
+    objetivo_colchon = necesidades * MESES_COLCHON_OBJETIVO
 
     gasto_anual = consumo * 12
     numero_fi = gasto_anual * MULTIPLO_FI
-    tasa_ahorro = (ingresos - consumo) / ingresos * 100 if ingresos > 0 else None
+    tasa_ahorro = _tasa(ingresos, consumo)
 
     aportacion_objetivo = ingresos * TASA_AHORRO_OBJETIVO / 100
     escenarios = []
     for etiqueta, mensual in (
-        ("Al ritmo actual", inversion),
+        ("Con lo que invierte el plan" if plan else "Al ritmo actual", inversion),
         ("Aportando 100 € más al mes", inversion + 100),
         (f"Invirtiendo el {TASA_AHORRO_OBJETIVO:.0f} % de la nómina", max(aportacion_objetivo, inversion)),
     ):
@@ -121,9 +184,12 @@ def resumen(db: Session, hoy: date | None = None) -> dict:
 
     return {
         "meses_media": MESES_MEDIA,
+        "plan": plan,
+        # Lo que pasó de verdad, para comparar con el plan.
+        "real": {**medias, "tasa_ahorro": _tasa(medias["ingresos"], medias["consumo"])},
         "ingresos_medios": ingresos,
         "consumo_medio": consumo,
-        "necesidades_medias": medias["necesidades"],
+        "necesidades_medias": necesidades,
         "inversion_media": inversion,
         "tasa_ahorro": tasa_ahorro,
         "tasa_ahorro_objetivo": TASA_AHORRO_OBJETIVO,

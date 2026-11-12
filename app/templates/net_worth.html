@@ -118,7 +118,9 @@
   {% set l = libertad %}
   <section>
     <h2>🧭 Camino a la libertad financiera</h2>
-    <p class="muted">Medias de los últimos {{ l.meses_media }} meses cerrados. El orden importa:
+    <p class="muted">{% if l.plan %}Según el presupuesto de {{ l.plan.nombre }}, lo que viene; al lado,
+       lo que pasó de verdad los últimos {{ l.meses_media }} meses.{% else %}Medias de los últimos
+       {{ l.meses_media }} meses cerrados.{% endif %} El orden importa:
        primero el colchón, después fuera la deuda cara, después invertir cada vez más.</p>
 
     <div class="cards">
@@ -127,9 +129,9 @@
         <div class="card-value {{ 'positive' if l.meses_colchon and l.meses_colchon >= l.meses_colchon_objetivo else 'negative' }}">
           {% if l.meses_colchon is not none %}{{ l.meses_colchon|numero(1) }} meses{% else %}—{% endif %}
         </div>
-        <div class="card-sub">{{ l.colchon|eur(0) }} líquidos de {{ l.objetivo_colchon|eur(0) }}
-          ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
-          {{ l.necesidades_medias|eur(0) }}/mes)</div>
+        <div class="card-sub">{{ l.colchon|eur(0) }} líquidos (Mediolanum y ahorro sin asignar) de
+          {{ l.objetivo_colchon|eur(0) }} ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
+          {{ l.necesidades_medias|eur(0) }}/mes). <a href="/dinero">Dónde está</a></div>
       </div>
       <div class="card">
         <div class="card-label">2 · Deuda de consumo</div>
@@ -143,7 +145,9 @@
           {% if l.tasa_ahorro is not none %}{{ "%.0f"|format(l.tasa_ahorro) }} %{% else %}—{% endif %}
         </div>
         <div class="card-sub">objetivo ≥ {{ "%.0f"|format(l.tasa_ahorro_objetivo) }} % · ingresas {{ l.ingresos_medios|eur(0) }}/mes,
-          consumes {{ l.consumo_medio|eur(0) }}, inviertes {{ l.inversion_media|eur(0) }}</div>
+          consumes {{ l.consumo_medio|eur(0) }}{% if l.plan %} con las huchas{% endif %}, inviertes {{ l.inversion_media|eur(0) }}
+          {% if l.plan and l.real.tasa_ahorro is not none %}<br>los últimos {{ l.meses_media }} meses fue un
+          {{ "%.0f"|format(l.real.tasa_ahorro) }} % ({{ l.real.consumo|eur(0) }}/mes de consumo){% endif %}</div>
       </div>
       <div class="card">
         <div class="card-label">Independencia financiera</div>

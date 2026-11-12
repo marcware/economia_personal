@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from app.categorization.seed_rules import CATEGORY_TREE
-from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup
+from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup, RolCuenta
 from app.services import budget_service, dashboard_service, disponible_service
 
 HOY = date(2026, 10, 5)
@@ -31,7 +31,7 @@ def test_gasto_neto_de_devoluciones(db, categoria, movimiento):
 def test_un_prestamo_abonado_no_es_ingreso(db, categoria, movimiento):
     nomina = categoria("Nómina", BudgetGroup.INGRESO)
     prestamos = categoria("Préstamos", BudgetGroup.NECESIDAD, recurrente=True)
-    movimiento(date(2026, 9, 28), 3000, nomina)
+    movimiento(date(2026, 9, 10), 3000, nomina)
     movimiento(date(2026, 9, 8), 2000, prestamos)  # el banco abona el préstamo
     movimiento(date(2026, 9, 3), -411.77, prestamos)
 
@@ -55,6 +55,22 @@ def test_un_prestamo_abonado_no_resta_de_las_cuotas(db, categoria, movimiento):
     assert gasto[cuotas.id] == pytest.approx(411.77)
     assert abono.id not in gasto
     assert dashboard_service.monthly_summary(db, 2026, 9)["ingresos"] == pytest.approx(0.0)
+
+
+def test_la_nomina_de_final_de_mes_cuenta_en_el_que_paga(db, categoria, movimiento):
+    nomina = categoria("Nómina", BudgetGroup.INGRESO)
+    alquiler = categoria("Alquiler", BudgetGroup.INGRESO)
+    super_ = categoria("Supermercado", BudgetGroup.NECESIDAD)
+    movimiento(date(2026, 9, 28), 2858.39, nomina)  # paga octubre
+    movimiento(date(2026, 10, 8), 400, alquiler)
+    movimiento(date(2026, 9, 29), -100, super_)  # el gasto va por mes natural
+
+    octubre = dashboard_service.monthly_summary(db, 2026, 10)
+    assert octubre["ingresos"] == pytest.approx(3258.39)
+    assert octubre["gastos"] == pytest.approx(0.0)
+    septiembre = dashboard_service.monthly_summary(db, 2026, 9)
+    assert (septiembre["ingresos"], septiembre["gastos"]) == (0.0, 100.0)
+    assert [e["label"] for e in dashboard_service.evolution(db)] == ["2026-09", "2026-10"]
 
 
 def test_ciclo_de_nomina(db, categoria, movimiento):
@@ -297,3 +313,33 @@ def test_la_averia_la_paga_la_hucha(db, categoria, movimiento):
     assert v["cubierto"] == pytest.approx(450)
     assert [f["categoria"].name for f in v["pasadas"]] == ["Bares"]  # 30 € de más no es una avería
     assert v["excesos"] == pytest.approx(30)
+
+
+def test_libertad_mira_el_plan_y_no_un_prestamo_ya_pagado(db, cuenta, categoria, movimiento):
+    from app.services import libertad_service
+
+    hoy = date.today()
+    nomina = categoria("Nómina", BudgetGroup.INGRESO)
+    hipoteca = categoria("Hipoteca", BudgetGroup.NECESIDAD, recurrente=True)
+    prestamo = categoria("Préstamo", BudgetGroup.NECESIDAD, recurrente=True)
+    bares = categoria("Bares", BudgetGroup.DESEO)
+    for atras in range(1, 7):  # nómina el día 10 de los seis meses anteriores
+        dia = disponible_service._sumar_mes(hoy.replace(day=10), -atras)
+        movimiento(dia, 2000, nomina)
+        movimiento(dia, -1500, prestamo)  # préstamo liquidado: no está en el presupuesto
+        movimiento(dia, -500, hipoteca)
+        movimiento(dia, -300, bares)
+    db.add_all([
+        Budget(category_id=hipoteca.id, year=hoy.year, month=hoy.month, monthly_limit=500),
+        Budget(category_id=bares.id, year=hoy.year, month=hoy.month, monthly_limit=200),
+        AccountBalance(account_id=cuenta.id, balance=4200, recorded_at=datetime.combine(hoy, datetime.min.time())),
+    ])
+    cuenta.rol = RolCuenta.AHORRO
+    db.commit()
+
+    l = libertad_service.resumen(db, hoy)
+    assert l["plan"]["ingresos"] == pytest.approx(2000.0)
+    assert l["real"]["tasa_ahorro"] < 0  # los últimos meses, con el préstamo
+    assert l["tasa_ahorro"] > 0  # el plan sí cabe
+    assert l["colchon"] == pytest.approx(4200.0)  # el ahorro sin asignar es colchón
+    assert l["necesidades_medias"] == pytest.approx(500.0)

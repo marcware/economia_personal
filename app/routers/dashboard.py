@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
@@ -20,7 +22,9 @@ def dashboard_home(
         return templates.TemplateResponse(request, "dashboard.html", {"sin_datos": True})
 
     if year is None or month is None or (year, month) not in months_available:
-        year, month = months_available[0]
+        # El mes en curso, aunque ya haya entrado la nómina del siguiente.
+        hoy = date.today()
+        year, month = (hoy.year, hoy.month) if (hoy.year, hoy.month) in months_available else months_available[0]
 
     idx = months_available.index((year, month))
     prev_month = months_available[idx + 1] if idx + 1 < len(months_available) else None

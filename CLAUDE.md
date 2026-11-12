@@ -170,7 +170,10 @@ Layout is a standard layered FastAPI app under `app/`:
   recompute it locally). Spend there is *net of refunds*: a positive movement categorized in a
   NECESIDAD/DESEO category (a Bizum paying back a share, a shop refund) subtracts from that category's
   spend and can leave it negative when the refund lands in a different month than the charge; other
-  services (dashboard, advisor 50/30/20, anual) still count only negatives. Income, everywhere, is only
+  services (dashboard, advisor 50/30/20, anual) still count only negatives. The dashboard counts the
+  salary (`disponible_service._categoria_nomina`) paid on or after `DIA_NOMINA_ADELANTADA` as income of
+  the month it funds, not the one it lands in, so the open month isn't thousands in the red until the
+  27th; its spend stays per calendar month, like the budgets. Income, everywhere, is only
   a positive movement in an INGRESO-group category (a loan paid into the account or a refund is not
   income; a loan disbursement goes to the EXCLUIDO "Abono de financiación", never to the loan-repayment
   category, where it would net against the instalments as a refund); `budget_service.ingresos_base` is the shared "income to measure the month against" (expected
@@ -223,9 +226,15 @@ Layout is a standard layered FastAPI app under `app/`:
   non-recurrent DESEO categories or uncategorized) shown on the dashboard;
   [libertad_service.py](app/services/libertad_service.py) is the financial-independence panel on
   `/patrimonio` (emergency fund in months of NECESIDAD spend, consumer debt, savings rate, gasto anual ×
-  25 target and projections at a 4 % real return). The emergency fund counts only `ManualAssetEntry`
-  rows flagged `liquido`; consumer debt is every declared liability whose name doesn't contain
-  "hipoteca".
+  25 target and projections at a 4 % real return). Its figures look ahead: when there's a budget
+  (`mes_del_plan`: the month after the pay cycle's if already prepared, else the cycle's) they come
+  from `plan_mensual` — expected regular income, budgeted spend plus the huchas' quota, committed
+  investment, NECESIDAD limits plus the annual-bills quota — and the last 6 closed months are shown
+  beside it as `real`, so a paid-off loan or a holiday doesn't keep saying "you spend more than you
+  earn" for half a year (the advisor's deficit check follows the same split). `/dinero`'s emergency-fund
+  target is this same `objetivo_colchon`. The emergency fund counts `ManualAssetEntry` rows flagged
+  `liquido` plus the balance of AHORRO-role accounts; the Cuenta Naranja is not counted as invested;
+  consumer debt is every declared liability whose name doesn't contain "hipoteca".
   [anual_service.py](app/services/anual_service.py) powers `/anual`, the live version of the user's
   old annual spreadsheet (`data/2026_Gastos.xlsx`): category × month grid where closed months are real
   spend and the current/future months are a forecast (budget if any; for `anual` categories the same

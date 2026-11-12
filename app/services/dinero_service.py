@@ -21,7 +21,7 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
-from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup, ManualAssetEntry, RolCuenta
+from app.models import Account, AccountBalance, Bank, Budget, ManualAssetEntry, RolCuenta
 from app.services import disponible_service, huchas_service, libertad_service
 
 ACTIVO_MEDIOLANUM = "Mediolanum (colchón, saldo cuenta)"
@@ -32,7 +32,6 @@ TRABAJO = {
     RolCuenta.AHORRO: "Ahorro sin asignar",
 }
 NOMBRE_BANCO = {Bank.ING: "ING", Bank.MEDIOLANUM: "Mediolanum"}
-MESES_FONDO = 6  # como libertad_service.MESES_COLCHON_OBJETIVO
 ORDEN = [RolCuenta.DIA, RolCuenta.RECIBOS, RolCuenta.NOMINA, RolCuenta.AHORRO]
 
 
@@ -72,26 +71,13 @@ def _variables_pendientes(db: Session, d: dict) -> float:
     return total
 
 
-def fondo_objetivo(db: Session, year: int, month: int, recibos_anuales: float) -> float | None:
-    """MESES_FONDO meses de necesidades según el presupuesto del mes (fijos y variables
-    NECESIDAD más la cuota de recibos anuales): mira hacia delante, así que los préstamos
-    ya pagados no lo inflan como la media de los últimos meses. None sin presupuesto."""
-    limites = [float(b.monthly_limit) for b in db.query(Budget).filter_by(active=True, year=year, month=month)
-               if b.category.budget_group == BudgetGroup.NECESIDAD]
-    return (sum(limites) + recibos_anuales) * MESES_FONDO if limites else None
-
-
 def mi_dinero(db: Session, hoy: date | None = None) -> dict:
     hoy = hoy or date.today()
     d = disponible_service.disponible(db, hoy)
     h = huchas_service.huchas(db, hoy)
-    # Con el presupuesto del mes que viene si ya está hecho: el fondo es para lo que llega.
-    year, month = d["mes_presupuesto"]
-    siguiente = (year + month // 12, month % 12 + 1)
-    fondo = (fondo_objetivo(db, *siguiente, h["huchas"][0]["cuota"])
-             or fondo_objetivo(db, year, month, h["huchas"][0]["cuota"]))
-    if fondo is None:
-        fondo = libertad_service.resumen(db, hoy)["objetivo_colchon"]
+    # Los meses de gastos esenciales del plan (libertad_service): mira hacia delante, así
+    # que los préstamos ya pagados no lo inflan como la media de los últimos meses.
+    fondo = libertad_service.resumen(db, hoy)["objetivo_colchon"]
 
     objetivos = {
         RolCuenta.DIA: _variables_pendientes(db, d),
