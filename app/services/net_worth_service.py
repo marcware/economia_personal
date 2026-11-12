@@ -41,8 +41,9 @@ def latest_manual_assets(db: Session) -> list[dict]:
 
 
 def latest_manual_liabilities(db: Session) -> list[dict]:
+    """Deudas con capital pendiente; las ya saldadas (último valor 0) no se listan."""
     rows = db.query(ManualLiabilityEntry).order_by(ManualLiabilityEntry.recorded_at.desc()).all()
-    return _latest_by_name(rows, "outstanding_balance")
+    return [d for d in _latest_by_name(rows, "outstanding_balance") if d["value"] > 0]
 
 
 def net_worth_summary(db: Session) -> dict:

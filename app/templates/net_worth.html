@@ -33,14 +33,15 @@
 
   <section>
     <h2>Cuentas bancarias</h2>
-    <p class="muted">Saldo real traído del banco al <a href="/conexiones">sincronizar</a>.</p>
+    <p class="muted">Saldo real traído del banco al <a href="/conexiones">sincronizar</a>. Qué trabajo
+       tiene cada una y si le sobra o le falta, en <a href="/dinero">Mi dinero</a>.</p>
     <table>
       <thead><tr><th>Cuenta</th><th class="num">Saldo</th><th class="num">Actualizado</th></tr></thead>
       <tbody>
         {% for a in summary.accounts %}
           <tr>
             <td>{{ a.account.bank.value }}{% if a.account.iban %} ···· {{ a.account.iban[-4:] }}{% endif %}
-              <span class="nota">{{ a.account.name|title }}</span></td>
+              <span class="nota">{{ trabajo[a.account.rol] if a.account.rol else a.account.name|title }}</span></td>
             <td class="num">{{ a.balance|eur }}</td>
             <td class="num muted">{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
           </tr>

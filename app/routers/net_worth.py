@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ManualAssetEntry, ManualLiabilityEntry
-from app.services import inversiones_service, libertad_service
+from app.services import dinero_service, inversiones_service, libertad_service
 from app.services.net_worth_service import net_worth_summary
 from app.templating import templates
 
@@ -23,7 +23,7 @@ def patrimonio_home(request: Request, db: Session = Depends(get_db)) -> HTMLResp
         request, "net_worth.html",
         {"summary": summary, "libertad": libertad, "otros_activos": otros,
          "total_inversiones": sum(a["value"] for a in inversiones),
-         "total_otros": sum(a["value"] for a in otros)},
+         "total_otros": sum(a["value"] for a in otros), "trabajo": dinero_service.TRABAJO},
     )
 
 
