@@ -212,7 +212,9 @@ Layout is a standard layered FastAPI app under `app/`:
   transfers without a matching incoming one in another account the app knows (ING's round-ups
   included). On `/presupuestos`, a variable category's overspend that meets those same thresholds is
   shown as paid by the hucha, not as "te has pasado".
-  [dinero_service.py](app/services/dinero_service.py) powers "Mi dinero" (`/dinero`): every account has
+  [dinero_service.py](app/services/dinero_service.py) ("Mi dinero"; no longer a page of its own: its transfers
+  are the first tasks in "Qué hacer" on `/` and its per-account table is the folded "Cuentas" section of
+  `/patrimonio`, and `/dinero` redirects there): every account has
   a job (`Account.rol`: NOMINA = Mediolanum, salary and emergency fund; RECIBOS; DIA; AHORRO = unassigned)
   plus the Cuenta Naranja for the huchas. Each gets what it should hold (rest of the cycle's variable
   budget, pending fixed costs and investment, 6 months of the budget's NECESIDAD plus annual bills, the
@@ -231,7 +233,7 @@ Layout is a standard layered FastAPI app under `app/`:
   from `plan_mensual` — expected regular income, budgeted spend plus the huchas' quota, committed
   investment, NECESIDAD limits plus the annual-bills quota — and the last 6 closed months are shown
   beside it as `real`, so a paid-off loan or a holiday doesn't keep saying "you spend more than you
-  earn" for half a year (the advisor's deficit check follows the same split). `/dinero`'s emergency-fund
+  earn" for half a year (the advisor's deficit check follows the same split). Mi dinero's emergency-fund
   target is this same `objetivo_colchon`. The emergency fund counts `ManualAssetEntry` rows flagged
   `liquido` plus the balance of AHORRO-role accounts; "invertido" is only the `Inversion` values (not the house nor the Cuenta Naranja);
   consumer debt is every declared liability whose name doesn't contain "hipoteca".
@@ -304,7 +306,17 @@ spreadsheet, not read live from it) into a given month's budgets — see its doc
 template values.
 
 Templates in `app/templates/` are server-rendered Jinja2 (one file per router/page), sharing
-`base.html`; static assets (CSS, a vendored `chart.min.js`) live in `app/static/`, mounted at `/static`.
+`base.html`, whose menu has only five sections (`secciones`): Hoy (+ Consejos), Presupuesto (Este mes ·
+El año · Gráficos), Movimientos, Mi patrimonio (Resumen · Inversiones) and Ajustes (Conexiones,
+Categorías, Autotraspasos, Notas). A section with several pages shows them as tabs (`.pestanas`) above
+the content; a new page goes into an existing section as a tab, not into the menu. The huchas detail
+(`_huchas.html`) lives on `/presupuestos#huchas`; static assets (CSS, a vendored `chart.min.js`) live in `app/static/`, mounted at `/static`.
+
+Simplicity is a requirement: the app is "economía personal para dummies" for a non-financial user.
+Before committing anything that touches pages, the menu or user-facing texts, run the
+`revisor-sencillez` agent ([.claude/agents/revisor-sencillez.md](.claude/agents/revisor-sencillez.md))
+and apply or raise what it finds. Prefer removing, merging or folding over adding pages, menu entries
+or figures.
 
 UI conventions: every colour comes from the CSS variables at the top of
 [app/static/css/style.css](app/static/css/style.css), which define a light and a dark theme (follows

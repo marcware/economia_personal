@@ -180,3 +180,9 @@ def eliminar_hito(
 ) -> RedirectResponse:
     goal_service.deactivate_goal(db, goal_id)
     return _redirect(year, month)
+
+
+@router.post("/hucha-variable")
+def hucha_variable(cuota: float = Form(...), db: Session = Depends(get_db)) -> RedirectResponse:
+    huchas_service.fijar_variable(db, max(cuota, 0.0))
+    return RedirectResponse("/presupuestos#huchas", status_code=302)

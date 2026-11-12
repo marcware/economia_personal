@@ -10,33 +10,39 @@
 </head>
 <body>
   {% set ruta = request.url.path %}
-  {% macro enlace(href, texto) -%}
-    <a href="{{ href }}"{% if ruta == href or (href != '/' and ruta.startswith(href ~ '/')) %} class="active" aria-current="page"{% endif %}>{{ texto }}{{ caller() if caller else '' }}</a>
-  {%- endmacro %}
+  {#- Cinco apartados; los que tienen varias páginas las enseñan como pestañas arriba. #}
+  {% set n_traspasos = pending_transfer_candidates_count() %}
+  {% set secciones = [
+    ("Hoy", [("/", "Hoy"), ("/consejos", "Consejos")]),
+    ("Presupuesto", [("/presupuestos", "Este mes"), ("/anual", "El año"), ("/dashboard", "Gráficos")]),
+    ("Movimientos", [("/movimientos", "Movimientos")]),
+    ("Mi patrimonio", [("/patrimonio", "Resumen"), ("/inversiones", "Inversiones")]),
+    ("Ajustes", [("/conexiones", "Conexiones"), ("/categorias", "Categorías"), ("/autotraspasos", "Autotraspasos"), ("/notas", "Notas")]),
+  ] %}
+  {% macro es(href) %}{{ 'si' if ruta == href or (href != '/' and ruta.startswith(href ~ '/')) }}{% endmacro %}
+  {% macro aviso(href) %}{% if href == "/autotraspasos" and n_traspasos > 0 %} <span class="badge">{{ n_traspasos }}</span>{% endif %}{% endmacro %}
   <div class="layout">
     <header class="sidebar">
       <a class="brand" href="/"><span class="brand-mark">€</span><span class="brand-name">Economía Personal</span></a>
       <nav>
-        <div class="nav-group">Día a día</div>
-        {{ enlace("/", "Hoy") }}
-        {{ enlace("/presupuestos", "Presupuestos") }}
-        {{ enlace("/dinero", "Mi dinero") }}
-        {{ enlace("/movimientos", "Movimientos") }}
-        {{ enlace("/consejos", "Consejos") }}
-        <div class="nav-group">Análisis</div>
-        {{ enlace("/dashboard", "Dashboard") }}
-        {{ enlace("/anual", "Año") }}
-        {{ enlace("/inversiones", "Inversiones") }}
-        {{ enlace("/patrimonio", "Patrimonio") }}
-        <div class="nav-group">Mantenimiento</div>
-        {% set n_traspasos = pending_transfer_candidates_count() %}
-        {% call enlace("/autotraspasos", "Autotraspasos") %}{% if n_traspasos > 0 %} <span class="badge">{{ n_traspasos }}</span>{% endif %}{% endcall %}
-        {{ enlace("/categorias", "Categorías") }}
-        {{ enlace("/conexiones", "Conexiones") }}
-        {{ enlace("/notas", "Notas") }}
+        {% set ns = namespace(actual=None) %}
+        {% for texto, pestanas in secciones %}
+          {% set ns2 = namespace(si=False) %}
+          {% for href, _ in pestanas %}{% if es(href) %}{% set ns2.si = True %}{% endif %}{% endfor %}
+          {% if ns2.si %}{% set ns.actual = pestanas %}{% endif %}
+          <a href="{{ pestanas[0][0] }}"{% if ns2.si %} class="active" aria-current="page"{% endif %}>{{ texto }}
+            {%- if texto == "Ajustes" and n_traspasos > 0 %} <span class="badge">{{ n_traspasos }}</span>{% endif %}</a>
+        {% endfor %}
       </nav>
     </header>
     <main class="content">
+      {% if ns.actual and ns.actual|length > 1 %}
+        <nav class="pestanas">
+          {% for href, texto in ns.actual %}
+            <a href="{{ href }}"{% if es(href) %} class="active" aria-current="page"{% endif %}>{{ texto }}{{ aviso(href) }}</a>
+          {% endfor %}
+        </nav>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
   </div>

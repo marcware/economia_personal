@@ -44,9 +44,13 @@
     </div>
   </div>
 
-  {% if pendientes %}
+  {% if traspasos or pendientes %}
     <section>
-      <h2>Pendiente</h2>
+      <h2>Qué hacer</h2>
+      {% for t in traspasos %}
+        <a class="advice advice-warning pendiente" href="/patrimonio#cuentas"><span>Pasa <strong>{{ t.importe|eur }}</strong>
+          de {{ t.desde }} a {{ t.hacia }} ({{ t.para }})</span><span aria-hidden="true">→</span></a>
+      {% endfor %}
       {% for p in pendientes %}
         <a class="advice advice-{{ p.severidad }} pendiente" href="{{ p.url }}"><span>{{ p.texto }}</span><span aria-hidden="true">→</span></a>
       {% endfor %}
@@ -69,8 +73,10 @@
     <p id="permitir-resultado" class="muted">Escribe un importe para ver cómo te deja hasta la nómina.</p>
   </section>
 
-  <section>
-    <h2>De dónde sale la cifra</h2>
+  <section class="plegable">
+    <details>
+    <summary><h2>De dónde sale la cifra</h2>
+      <span class="resumen">{{ d.saldo|eur(0) }} en cuenta − {{ d.comprometido|eur(0) }} que ya tiene dueño</span></summary>
     <p class="muted">
       Ciclo del {{ d.ciclo.inicio.strftime('%d/%m') }} al {{ d.ciclo.siguiente.strftime('%d/%m') }}
       {% if d.ciclo.detectada %}(de nómina a nómina){% else %}(mes natural: no se detecta la nómina){% endif %},
@@ -112,29 +118,27 @@
       {{ tabla_pendientes(d.variables_necesarios) }}
       </details>
     {% endif %}
-    <details class="desglose">
-    <summary>Huchas <span class="resumen">{{ d.huchas.cuota|eur(0) }} al mes a la {{ d.huchas.cuenta }}</span></summary>
-    <p class="muted">Dinero para lo que no cabe en un mes normal. Cada mes se pasa su cuota a la {{ d.huchas.cuenta }}
-       y, cuando llega el pago, sale de ahí. Detalle en <a href="/presupuestos#huchas">Presupuestos</a>.</p>
-    <table class="ledger">
-      <tbody>
-        {% for x in d.huchas.huchas %}
-          <tr><td>{{ x.nombre }} <span class="muted">({{ x.ejemplo }})</span></td><td>{{ x.cuota|eur }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% if d.anuales %}
-      <p class="muted">Recibos de los próximos 12 meses:</p>
-      <table class="ledger">
-        <tbody>
-          {% for a in d.anuales %}
-            <tr><td>{{ a.etiqueta }}</td><td>{{ a.importe|eur }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endif %}
+    <p class="muted">Las huchas, con sus cuotas y los recibos que cubren, están en <a href="/presupuestos#huchas">Presupuesto</a>.</p>
     </details>
   </section>
+
+  {% if consejos %}
+    <section class="plegable">
+      <details>
+      <summary><h2>Consejos</h2><span class="resumen">{{ consejos[0].title }}</span></summary>
+      <ul class="advice-list">
+        {% for a in consejos %}
+          <li class="advice advice-{{ a.severity }}">
+            <strong>{{ a.title }}</strong>
+            <p>{{ a.message }}</p>
+            {% if a.url %}<p><a href="{{ a.url }}">Ver detalle &raquo;</a></p>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      <p><a href="/consejos">Ver todos los consejos &raquo;</a></p>
+      </details>
+    </section>
+  {% endif %}
 
   <script>
     (function () {

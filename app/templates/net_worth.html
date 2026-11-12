@@ -12,42 +12,62 @@
       <div class="card-sub">cuentas + inversiones − deudas</div>
     </div>
     <div class="card">
-      <div class="card-label">Cuentas bancarias</div>
-      <div class="card-value positive">{{ summary.total_accounts|eur }}</div>
+      <div class="card-label">Cuentas</div>
+      <div class="card-value positive">{{ dinero.total|eur }}</div>
     </div>
     <div class="card">
       <div class="card-label">Inversiones</div>
       <div class="card-value positive">{{ total_inversiones|eur }}</div>
       <div class="card-sub"><a href="/inversiones">ver la cartera</a></div>
     </div>
+    {% if otros_activos %}
     <div class="card">
       <div class="card-label">Otros activos</div>
       <div class="card-value positive">{{ total_otros|eur }}</div>
-      <div class="card-sub">cuentas de ahorro, colchón</div>
+      <div class="card-sub">lo que declaras a mano</div>
     </div>
+    {% endif %}
     <div class="card">
       <div class="card-label">Deudas pendientes</div>
       <div class="card-value negative">{{ summary.total_liabilities|eur }}</div>
     </div>
   </div>
 
-  <section>
-    <h2>Cuentas bancarias</h2>
-    <p class="muted">Saldo real traído del banco al <a href="/conexiones">sincronizar</a>. Qué trabajo
-       tiene cada una y si le sobra o le falta, en <a href="/dinero">Mi dinero</a>.</p>
+  {% set r = dinero %}
+  <section class="plegable" id="cuentas">
+    <details{% if r.traspasos %} open{% endif %}>
+    <summary><h2>Cuentas</h2>
+      <span class="resumen">{% if r.traspasos %}{{ r.traspasos|length }} traspaso{{ "s" if r.traspasos|length > 1 }} para dejar cada euro en su sitio{% else %}cada euro en su sitio{% endif %}</span></summary>
+    <p class="muted">Cada cuenta tiene un trabajo. Si cada una tiene lo que le toca, lo del día a día se puede
+       gastar, lo de las huchas espera a su recibo y el fondo de emergencia no se toca.</p>
     <table>
-      <thead><tr><th>Cuenta</th><th class="num">Saldo</th><th class="num">Actualizado</th></tr></thead>
+      <thead><tr><th>Cuenta</th><th class="num">Tiene</th><th class="num">Debería tener</th><th class="num"></th></tr></thead>
       <tbody>
-        {% for a in summary.accounts %}
+        {% for c in r.cuentas %}
           <tr>
-            <td>{{ a.account.bank.value }}{% if a.account.iban %} ···· {{ a.account.iban[-4:] }}{% endif %}
-              <span class="nota">{{ trabajo[a.account.rol] if a.account.rol else a.account.name|title }}</span></td>
-            <td class="num">{{ a.balance|eur }}</td>
-            <td class="num muted">{{ a.recorded_at.strftime('%d/%m/%Y') }}</td>
+            <td><strong>{{ c.nombre }}</strong>
+              <span class="nota">{{ c.trabajo }}{% if c.fecha %} · saldo al {{ c.fecha.strftime('%d/%m') }}{% endif %}</span></td>
+            <td class="num">{% if c.saldo is not none %}{{ c.saldo|eur }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{% if c.objetivo is not none %}{{ c.objetivo|eur }}{% else %}<span class="muted">lo que sobre</span>{% endif %}</td>
+            <td class="num">
+              {% if c.diferencia is none %}
+              {% elif c.diferencia < -1 %}<span class="negative">faltan {{ (-c.diferencia)|eur }}</span>
+              {% elif c.diferencia > 1 %}<span class="positive">sobran {{ c.diferencia|eur }}</span>
+              {% else %}<span class="muted">bien</span>{% endif %}
+            </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+    {% if r.traspasos %}
+      <p><strong>Para arreglarlo:</strong>
+        {% for t in r.traspasos %}pasa {{ t.importe|eur }} de {{ t.desde }} a {{ t.hacia }} ({{ t.para }}){{ "; " if not loop.last else "." }}{% endfor %}</p>
+    {% endif %}
+    <p class="muted">"Debería tener": en el día a día, lo que queda del presupuesto de gastos hasta la nómina; en recibos,
+       los fijos y la inversión que faltan por cobrarse; en Mediolanum, 6 meses de gastos esenciales (fondo de emergencia);
+       en la Naranja, las <a href="/presupuestos#huchas">huchas</a>. Los saldos se actualizan al sincronizar en
+       <a href="/conexiones">Conexiones</a>, al entrar en ING y al importar el extracto de Mediolanum.</p>
+    </details>
   </section>
 
   <section>
@@ -132,7 +152,7 @@
         </div>
         <div class="card-sub">{{ l.colchon|eur(0) }} líquidos (Mediolanum y ahorro sin asignar) de
           {{ l.objetivo_colchon|eur(0) }} ({{ l.meses_colchon_objetivo }} meses de gastos esenciales,
-          {{ l.necesidades_medias|eur(0) }}/mes). <a href="/dinero">Dónde está</a></div>
+          {{ l.necesidades_medias|eur(0) }}/mes). <a href="#cuentas">Dónde está</a></div>
       </div>
       <div class="card">
         <div class="card-label">2 · Deuda de consumo</div>

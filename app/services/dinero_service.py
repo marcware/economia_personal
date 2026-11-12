@@ -1,4 +1,4 @@
-"""Mi dinero (/dinero): dónde está cada euro y qué trabajo tiene.
+"""Mi dinero (los traspasos de Hoy y las cuentas de /patrimonio): dónde está cada euro y qué trabajo tiene.
 
 Cada cuenta tiene un rol (Account.rol) y la Cuenta Naranja guarda las huchas:
 

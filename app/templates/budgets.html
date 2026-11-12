@@ -296,13 +296,7 @@
 
   {% endif %}
 
-  {% if huchas %}
-    <section>
-      <h2>🐷 Huchas</h2>
-      <p>{{ huchas.cuota|eur }} al mes a la {{ huchas.cuenta }}{% if huchas.falta > 0 %}; faltan {{ huchas.falta|eur }} para arrancar{% endif %}.
-         Detalle y cuotas en <a href="/dinero#huchas">Mi dinero</a>.</p>
-    </section>
-  {% endif %}
+  {% include "_huchas.html" %}
 
   {% if resumen.sin_presupuesto_fijos %}
     <section>

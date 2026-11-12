@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -20,7 +21,8 @@ from app.routers import (
     transfer_candidates,
 )
 from app.database import get_db
-from app.services import budget_service, disponible_service, pendientes_service
+from app.advisor.engine import get_advice
+from app.services import budget_service, dinero_service, disponible_service, pendientes_service
 from app.templating import templates
 
 APP_DIR = Path(__file__).resolve().parent
@@ -45,12 +47,16 @@ app.include_router(dinero.router)
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    """Portada "Hoy": cuánto es libre hasta la nómina, para decidir antes de comprar."""
+    """Portada "Hoy": cuánto es libre hasta la nómina, qué hay que hacer y los consejos que
+    más importan."""
     budget_service.ajustar_meses_abiertos(db)  # usa el presupuesto del mes del ciclo
+    hoy = date.today()
     return templates.TemplateResponse(
         request,
         "home.html",
-        {"d": disponible_service.disponible(db), "pendientes": pendientes_service.pendientes(db)},
+        {"d": disponible_service.disponible(db, hoy), "pendientes": pendientes_service.pendientes(db),
+         "traspasos": dinero_service.mi_dinero(db, hoy)["traspasos"],
+         "consejos": get_advice(db, hoy.year, hoy.month)[:3]},
     )
 
 

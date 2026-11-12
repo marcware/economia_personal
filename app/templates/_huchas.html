@@ -1,4 +1,4 @@
-{# Las huchas (huchas_service.huchas), en /dinero. #}
+{# Las huchas (huchas_service.huchas), en /presupuestos. #}
   {% if huchas %}
     {% set hs = huchas %}
     <section class="plegable" id="huchas">
@@ -41,7 +41,7 @@
           <tr>
             <td><strong>{{ variable.nombre }}</strong><span class="nota">{{ variable.ejemplo }}</span></td>
             <td class="num">
-              <form method="post" action="/dinero/hucha-variable" class="inline-form solo-si-cambia" data-aviso="Hucha guardada">
+              <form method="post" action="/presupuestos/hucha-variable" class="inline-form solo-si-cambia" data-aviso="Hucha guardada">
                 <button type="submit" class="button-sm">Guardar</button>
                 <input type="number" step="1" min="0" name="cuota" value="{{ '%.0f'|format(variable.cuota) }}" aria-label="Cuota mensual de la hucha de viajes e imprevistos">
               </form>

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ManualAssetEntry, ManualLiabilityEntry
-from app.services import dinero_service, inversiones_service, libertad_service
+from app.services import dinero_service, huchas_service, inversiones_service, libertad_service
 from app.services.net_worth_service import net_worth_summary
 from app.templating import templates
 
@@ -15,15 +15,18 @@ router = APIRouter(prefix="/patrimonio", tags=["patrimonio"])
 def patrimonio_home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     summary = net_worth_summary(db)
     libertad = libertad_service.resumen(db)
-    # Las inversiones se apuntan en /inversiones; aquí solo su total y el resto de activos.
+    dinero = dinero_service.mi_dinero(db)
+    # Las inversiones se apuntan en /inversiones; aquí solo su total. Mediolanum y la Cuenta
+    # Naranja son valores declarados, pero se enseñan con las cuentas, donde tienen su trabajo.
     nombres = inversiones_service.nombres(db)
+    cuentas_declaradas = {dinero_service.ACTIVO_MEDIOLANUM, huchas_service.ACTIVO}
     inversiones = [a for a in summary["assets"] if a["name"] in nombres]
-    otros = [a for a in summary["assets"] if a["name"] not in nombres]
+    otros = [a for a in summary["assets"] if a["name"] not in nombres | cuentas_declaradas]
     return templates.TemplateResponse(
         request, "net_worth.html",
-        {"summary": summary, "libertad": libertad, "otros_activos": otros,
+        {"summary": summary, "libertad": libertad, "dinero": dinero, "otros_activos": otros,
          "total_inversiones": sum(a["value"] for a in inversiones),
-         "total_otros": sum(a["value"] for a in otros), "trabajo": dinero_service.TRABAJO},
+         "total_otros": sum(a["value"] for a in otros)},
     )
 
 
