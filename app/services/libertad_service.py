@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.advisor.data import load_transactions_df
 from app.models import Account, AccountBalance, Budget, BudgetGroup, RolCuenta
-from app.services import budget_service, disponible_service, huchas_service
+from app.services import budget_service, disponible_service, huchas_service, inversiones_service
 from app.services.dashboard_service import MONTHS_ES
 from app.services.net_worth_service import latest_manual_assets, latest_manual_liabilities
 
@@ -156,8 +156,10 @@ def resumen(db: Session, hoy: date | None = None) -> dict:
 
     activos = latest_manual_assets(db)
     colchon = sum(a["value"] for a in activos if a["liquido"]) + _ahorro_sin_asignar(db)
-    # La Cuenta Naranja no es inversión: todo su saldo es de las huchas.
-    invertido = sum(a["value"] for a in activos if not a["liquido"] and a["name"] != huchas_service.ACTIVO)
+    # Solo lo que rinde para la libertad financiera: las inversiones, no la casa ni la
+    # Cuenta Naranja (todo su saldo es de las huchas).
+    nombres = inversiones_service.nombres(db)
+    invertido = sum(a["value"] for a in activos if a["name"] in nombres)
     deuda_consumo = [d for d in latest_manual_liabilities(db) if _es_deuda_de_consumo(d["name"])]
 
     meses_colchon = colchon / necesidades if necesidades > 0 else None

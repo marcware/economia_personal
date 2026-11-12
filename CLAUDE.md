@@ -233,7 +233,7 @@ Layout is a standard layered FastAPI app under `app/`:
   beside it as `real`, so a paid-off loan or a holiday doesn't keep saying "you spend more than you
   earn" for half a year (the advisor's deficit check follows the same split). `/dinero`'s emergency-fund
   target is this same `objetivo_colchon`. The emergency fund counts `ManualAssetEntry` rows flagged
-  `liquido` plus the balance of AHORRO-role accounts; the Cuenta Naranja is not counted as invested;
+  `liquido` plus the balance of AHORRO-role accounts; "invertido" is only the `Inversion` values (not the house nor the Cuenta Naranja);
   consumer debt is every declared liability whose name doesn't contain "hipoteca".
   [anual_service.py](app/services/anual_service.py) powers `/anual`, the live version of the user's
   old annual spreadsheet (`data/2026_Gastos.xlsx`): category × month grid where closed months are real
