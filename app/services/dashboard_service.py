@@ -32,6 +32,12 @@ def _es_ingreso(df: pd.DataFrame) -> pd.Series:
     return (df["amount"] > 0) & (df["budget_group"] == "INGRESO")
 
 
+def _es_gasto(df: pd.DataFrame) -> pd.Series:
+    """Salidas que son gasto: no las EXCLUIDO (cancelar una deuda con la venta de un piso no
+    es gastar)."""
+    return (df["amount"] < 0) & (df["budget_group"] != "EXCLUIDO")
+
+
 def available_months(db: Session) -> list[tuple[int, int]]:
     """Meses con movimientos, más recientes primero."""
     df = _load_transactions_df(db)
@@ -69,11 +75,11 @@ def monthly_summary(db: Session, year: int, month: int) -> dict:
 
     ingresos = float(month_df.loc[_es_ingreso(month_df), "amount"].sum())
     otros_abonos = float(month_df.loc[(month_df["amount"] > 0) & ~_es_ingreso(month_df), "amount"].sum())
-    gastos = float(-month_df.loc[month_df["amount"] < 0, "amount"].sum())
+    gastos = float(-month_df.loc[_es_gasto(month_df), "amount"].sum())
     ahorro = ingresos - gastos
 
     categories = {c.id: c for c in db.query(Category).all()}
-    gasto_df = month_df[month_df["amount"] < 0].copy()
+    gasto_df = month_df[_es_gasto(month_df)].copy()
     gasto_df["amount"] = -gasto_df["amount"]
     gasto_df["categoria"] = gasto_df["category_id"].apply(lambda cid: _category_label(cid, categories))
     desglose = gasto_df.groupby("categoria")["amount"].sum().sort_values(ascending=False)
@@ -100,7 +106,7 @@ def evolution(db: Session, months: int = 12) -> list[dict]:
     df["period"] = df["date"].dt.to_period("M")
 
     df["ingreso"] = df["amount"].where(_es_ingreso(df), 0.0)
-    df["gasto"] = (-df["amount"]).where(df["amount"] < 0, 0.0)
+    df["gasto"] = (-df["amount"]).where(_es_gasto(df), 0.0)
     grouped = df.groupby("period").agg(
         ingresos=("ingreso", "sum"), gastos=("gasto", "sum")
     ).sort_index().tail(months)

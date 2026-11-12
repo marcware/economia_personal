@@ -46,6 +46,14 @@ def cuenta_ahorro(posicion: dict) -> float | None:
     return None
 
 
+def hipoteca(posicion: dict) -> float | None:
+    """Capital pendiente de la hipoteca (producto MORTGAGE, en negativo en la posición)."""
+    for p in posicion.get("products") or []:
+        if p.get("type") == "MORTGAGE":
+            return abs(float(p.get("balanceToShow") or 0))
+    return None
+
+
 def _fecha(texto: str) -> date:
     return datetime.strptime(texto, "%d/%m/%Y").date()
 

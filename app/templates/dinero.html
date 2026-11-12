@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Mi dinero{% endblock %}
+{% block content %}
+  <h1>Mi dinero</h1>
+  <p class="muted">Cada cuenta tiene un trabajo. Si cada una tiene lo que le toca, no hay que mirar nada más:
+     lo del día a día se puede gastar, lo de las huchas espera a su recibo y el fondo de emergencia no se toca.</p>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">En tus cuentas</div>
+      <div class="card-value">{{ r.total|eur }}</div>
+      <div class="card-sub">sumando todas, incluida la Naranja</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Con trabajo</div>
+      <div class="card-value">{{ r.con_trabajo|eur }}</div>
+      <div class="card-sub">lo que falta del mes, huchas y fondo de emergencia</div>
+    </div>
+    <div class="card card-hero">
+      <div class="card-label">{{ 'Sin asignar' if r.sin_asignar >= 0 else 'Te falta' }}</div>
+      <div class="card-value {{ 'positive' if r.sin_asignar >= 0 else 'negative' }}">{{ r.sin_asignar|abs|eur }}</div>
+      <div class="card-sub">{% if r.sin_asignar >= 0 %}dinero sin trabajo: invertir, amortizar, un objetivo…{% else %}hay más comprometido que dinero{% endif %}</div>
+    </div>
+  </div>
+
+  {% if r.traspasos %}
+    <section>
+      <h2>Para dejarlo todo en su sitio</h2>
+      <table>
+        <thead><tr><th>Desde</th><th>Hacia</th><th>Para</th><th class="num">Importe</th></tr></thead>
+        <tbody>
+          {% for t in r.traspasos %}
+            <tr><td>{{ t.desde }}</td><td>{{ t.hacia }}</td><td class="muted">{{ t.para }}</td><td class="num"><strong>{{ t.importe|eur }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted">Los saldos se actualizan al sincronizar en <a href="/conexiones">Conexiones</a>; el de la Naranja, al entrar en ING
+         desde <a href="/inversiones/plan-ing">el plan de pensiones</a>, y el de Mediolanum, al importar su extracto.</p>
+    </section>
+  {% endif %}
+
+  <section>
+    <h2>Cuentas</h2>
+    <table>
+      <thead><tr><th>Cuenta</th><th>Su trabajo</th><th class="num">Tiene</th><th class="num">Le toca tener</th><th class="num">Diferencia</th></tr></thead>
+      <tbody>
+        {% for c in r.cuentas %}
+          <tr>
+            <td><strong>{{ c.nombre }}</strong>{% if c.fecha %}<span class="nota">saldo al {{ c.fecha.strftime('%d/%m') }}</span>{% endif %}</td>
+            <td>{{ c.trabajo }}
+              <span class="nota">
+                {% if c.rol == "DIA" %}lo que queda de los variables hasta la nómina del {{ r.ciclo.siguiente.strftime('%d/%m') }}
+                {% elif c.rol == "RECIBOS" %}fijos e inversión que faltan por cobrarse hasta la nómina
+                {% elif c.rol == "NOMINA" %}fondo: 6 meses de necesidades del presupuesto
+                {% elif c.rol == "HUCHAS" %}lo que debería haber hoy en las huchas (<a href="#huchas">abajo</a>)
+                {% else %}lo que no tiene otro trabajo{% endif %}</span></td>
+            <td class="num">{% if c.saldo is not none %}{{ c.saldo|eur }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{% if c.objetivo is not none %}{{ c.objetivo|eur }}{% else %}<span class="muted">el resto</span>{% endif %}</td>
+            <td class="num">
+              {% if c.diferencia is none %}<span class="muted">—</span>
+              {% elif c.diferencia < -1 %}<span class="negative">faltan {{ (-c.diferencia)|eur }}</span>
+              {% elif c.diferencia > 1 %}<span class="positive">sobran {{ c.diferencia|eur }}</span>
+              {% else %}<span class="muted">justo</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Lo que sobra en el día a día o en recibos es margen del mes: puedes dejarlo o pasarlo al ahorro.
+       El <a href="/">libre de Hoy</a> mira solo esas dos cuentas.</p>
+  </section>
+
+  {% include "_huchas.html" %}
+{% endblock %}

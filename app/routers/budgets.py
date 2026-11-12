@@ -105,13 +105,6 @@ def crear_presupuesto(
     return _redirect(year, month)
 
 
-@router.post("/hucha-variable")
-def hucha_variable(year: int = Form(...), month: int = Form(...), cuota: float = Form(...),
-                   db: Session = Depends(get_db)) -> RedirectResponse:
-    huchas_service.fijar_variable(db, max(cuota, 0.0))
-    return _redirect(year, month)
-
-
 @router.post("/copiar")
 def copiar_presupuesto(
     origen_year: int = Form(...),

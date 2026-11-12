@@ -58,7 +58,7 @@ def medias_mensuales(db: Session, hoy: date | None = None) -> dict:
     """Ingresos, consumo (por grupo) e inversión medios de los últimos MESES_MEDIA meses cerrados.
 
     Ingresos = solo categorías INGRESO: un préstamo abonado en cuenta no es un ingreso.
-    Consumo = todo gasto que no es ahorro/inversión.
+    Consumo = todo gasto que no es ahorro/inversión ni EXCLUIDO (cancelar deuda no es gastar).
     """
     hoy = hoy or date.today()
     df = load_transactions_df(db)
@@ -69,7 +69,7 @@ def medias_mensuales(db: Session, hoy: date | None = None) -> dict:
 
     df = df[df["date"].dt.to_period("M").isin(meses)]
     ingresos = df.loc[(df["amount"] > 0) & (df["budget_group"] == "INGRESO"), "amount"].sum()
-    gastos = df[df["amount"] < 0]
+    gastos = df[(df["amount"] < 0) & (df["budget_group"] != "EXCLUIDO")]
     inversion = -gastos.loc[gastos["budget_group"] == "AHORRO", "amount"].sum()
     consumo = -gastos.loc[gastos["budget_group"] != "AHORRO", "amount"].sum()
     necesidades = -gastos.loc[gastos["budget_group"] == "NECESIDAD", "amount"].sum()

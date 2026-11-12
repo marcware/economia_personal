@@ -10,7 +10,7 @@ MIN_SUBIDA_TENDENCIA = 0.15  # una tendencia ha de subir al menos esto sobre el 
 
 
 def _monthly_category_series(df: pd.DataFrame) -> pd.DataFrame:
-    gastos = df[df["amount"] < 0].copy()
+    gastos = df[(df["amount"] < 0) & (df["budget_group"] != "EXCLUIDO")].copy()
     gastos["amount"] = -gastos["amount"]
     gastos["period"] = gastos["date"].dt.to_period("M")
     return gastos.groupby(["period", "category_label"])["amount"].sum().reset_index()

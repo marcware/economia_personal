@@ -12,6 +12,15 @@ class Bank(str, enum.Enum):
     MEDIOLANUM = "MEDIOLANUM"
 
 
+class RolCuenta(str, enum.Enum):
+    """El trabajo de cada cuenta (ver dinero_service): si cada una hace una sola cosa, su
+    saldo ya dice cómo vas."""
+    NOMINA = "NOMINA"      # donde cae la nómina; guarda el fondo de emergencia (Mediolanum)
+    RECIBOS = "RECIBOS"    # recibos fijos domiciliados: hipoteca, luz, seguros...
+    DIA = "DIA"            # día a día: tarjeta, Bizum, gastos variables
+    AHORRO = "AHORRO"      # ahorro sin asignar todavía
+
+
 class Account(Base):
     __tablename__ = "accounts"
 
@@ -24,6 +33,7 @@ class Account(Base):
     external_account_id: Mapped[str | None] = mapped_column(String(100), default=None)
     iban: Mapped[str | None] = mapped_column(String(34), default=None)
     identification_hash: Mapped[str | None] = mapped_column(String(100), default=None, unique=True)
+    rol: Mapped[RolCuenta | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     def __repr__(self) -> str:

@@ -4,8 +4,9 @@ Semiautomático, como scripts/scrape_mediolanum.py: abre Chrome con un perfil pr
 (secrets/ing_chrome) y el login lo haces tú (con la confirmación en el móvil). La contraseña
 nunca se guarda. Nada más entrar, la web de ING pide tu posición global: el script la
 recoge, pide los movimientos del plan con tu misma sesión, los guarda y cierra el navegador.
-De la misma posición se guarda el saldo de la Cuenta Naranja, donde están las huchas
-(app/services/huchas_service.py). Ver app/integrations/ing/plan_pensiones.py.
+De la misma posición se guardan el saldo de la Cuenta Naranja, donde están las huchas
+(app/services/huchas_service.py), y el capital pendiente de la hipoteca, en /patrimonio.
+Ver app/integrations/ing/plan_pensiones.py.
 
 Uso:
     python scripts/scrape_ing.py
@@ -21,6 +22,7 @@ from playwright.sync_api import Error, Response, sync_playwright
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.database import SessionLocal  # noqa: E402
 from app.integrations.ing import plan_pensiones  # noqa: E402
+from app.models import ManualLiabilityEntry  # noqa: E402
 from app.services import huchas_service  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -29,6 +31,7 @@ INICIO = "https://www.ing.es/"
 ESPERA_MAX_MS = 10 * 60 * 1000
 POSICION = re.compile(r"^https://api\.ing\.ingdirect\.es/position-keeping/?(\?|$)")
 POR_PAGINA = 100
+HIPOTECA = "Hipoteca ING"  # su nombre en /patrimonio
 
 # Se ejecuta en la propia web de ING: mismo origen, mismas cookies de tu sesión.
 PEDIR_JSON = """async (url) => {
@@ -102,6 +105,11 @@ def _leer(contexto, posicion: dict) -> None:
         if naranja is not None:
             huchas_service.guardar_saldo(db, naranja)
             print(f"Cuenta Naranja (huchas): {naranja:.2f} €", flush=True)
+        pendiente = plan_pensiones.hipoteca(posicion)
+        if pendiente is not None:
+            db.add(ManualLiabilityEntry(name=HIPOTECA, outstanding_balance=round(pendiente, 2)))
+            db.commit()
+            print(f"Hipoteca, capital pendiente: {pendiente:.2f} €", flush=True)
     finally:
         db.close()
     print(f"Plan leído: {r['saldo']:.2f} €, {r['movimientos']} movimientos ({r['aportaciones_nuevas']} aportaciones nuevas).",

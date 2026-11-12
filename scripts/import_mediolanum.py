@@ -17,6 +17,7 @@ from app.categorization.normalize import normalize_description
 from app.database import SessionLocal
 from app.importers.mediolanum import parse_mediolanum_xls
 from app.models import Account, Bank, Transaction, TransactionSource
+from app.services import dinero_service
 from app.services.transfer_detector import find_candidates
 
 
@@ -72,6 +73,9 @@ def main(file_path: str) -> None:
             inserted += 1
 
         db.commit()
+        saldo = dinero_service.guardar_saldo_mediolanum(db, raw_transactions)
+        if saldo is not None:
+            print(f"Saldo de la cuenta de Mediolanum: {saldo:.2f} €")
         nuevos_candidatos = find_candidates(db)
         print(
             f"Leídos: {len(raw_transactions)} | importados: {inserted} | "

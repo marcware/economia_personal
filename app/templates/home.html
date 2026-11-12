@@ -89,10 +89,10 @@
         <tr><td>− Huchas que faltan por pasar a la {{ d.huchas.cuenta }}
               <span class="muted">({{ d.traspasado_huchas|eur }} de {{ d.huchas.cuota|eur }} pasados)</span></td>
             <td>{{ d.huchas_pendiente|eur }}</td></tr>
-        {% if d.huchas.falta > 0 %}
+        {% if d.arranque_huchas > 0 %}
         <tr><td>− Para arrancar las huchas, de una vez
               <span class="muted">(en la {{ d.huchas.cuenta }} hay {{ (d.huchas.saldo or 0)|eur }} de {{ d.huchas.objetivo|eur }})</span></td>
-            <td>{{ d.huchas.falta|eur }}</td></tr>
+            <td>{{ d.arranque_huchas|eur }}</td></tr>
         {% endif %}
       </tbody>
       <tfoot>

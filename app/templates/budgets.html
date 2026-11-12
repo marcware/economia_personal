@@ -297,67 +297,10 @@
   {% endif %}
 
   {% if huchas %}
-    {% set hs = huchas %}
-    <section class="plegable" id="huchas">
-      <details{% if hs.falta > 0 %} open{% endif %}>
-      <summary><h2>🐷 Huchas</h2>
-        <span class="resumen">{{ hs.cuota|eur(0) }} al mes a la {{ hs.cuenta }}{% if hs.falta > 0 %} · faltan {{ hs.falta|eur(0) }} para arrancar{% endif %}</span></summary>
-      <p class="muted">Para lo que no cabe en un mes normal. Cada mes pasas la cuota a la {{ hs.cuenta }}; cuando llega
-         el recibo, la avería o el viaje, sale de ahí y no revienta el presupuesto del mes.</p>
-      <div class="cards">
-        <div class="card">
-          <div class="card-label">Cada mes</div>
-          <div class="card-value">{{ hs.cuota|eur }}</div>
-          <div class="card-sub">a la {{ hs.cuenta }} al cobrar la nómina</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Debería haber hoy</div>
-          <div class="card-value">{{ hs.objetivo|eur }}</div>
-          <div class="card-sub">para llegar a todo a tiempo</div>
-        </div>
-        <div class="card{{ ' card-hero' if hs.falta > 0 }}">
-          <div class="card-label">Hay ahora</div>
-          <div class="card-value">{% if hs.saldo is not none %}{{ hs.saldo|eur }}{% else %}—{% endif %}</div>
-          <div class="card-sub">{% if hs.falta > 0 %}<strong>pasa {{ hs.falta|eur }} de una vez</strong> para arrancar{% else %}las huchas están al día{% endif %}
-            {% if hs.fecha_saldo %}· saldo al {{ hs.fecha_saldo.strftime('%d/%m') }}{% endif %}</div>
-        </div>
-      </div>
-      <table>
-        <thead><tr><th>Hucha</th><th class="num">Al mes</th><th class="num">Debería haber hoy</th><th>De dónde sale</th></tr></thead>
-        <tbody>
-          {% set recibos, variable = hs.huchas %}
-          <tr>
-            <td><strong>{{ recibos.nombre }}</strong><span class="nota">{{ recibos.ejemplo }}</span></td>
-            <td class="num">{{ recibos.cuota|eur }}<span class="nota">se calcula sola</span></td>
-            <td class="num">{{ recibos.inicial|eur }}</td>
-            <td class="muted">
-              {% for m in recibos.detalle.meses if m.total >= 50 %}{{ m.nombre|lower }}: {% for c in m.conceptos if c.importe >= 50 %}{{ c.etiqueta.split(' · ')[-1] }} {{ c.importe|eur(0) }}{{ ", " if not loop.last }}{% endfor %}{{ " · " if not loop.last }}{% endfor %}
-              <span class="nota">próximos 12 meses: {{ recibos.detalle.total|eur(0) }} sobre un mes normal</span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong>{{ variable.nombre }}</strong><span class="nota">{{ variable.ejemplo }}</span></td>
-            <td class="num">
-              <form method="post" action="/presupuestos/hucha-variable" class="inline-form solo-si-cambia" data-aviso="Hucha guardada">
-                <input type="hidden" name="year" value="{{ year }}">
-                <input type="hidden" name="month" value="{{ month }}">
-                <button type="submit" class="button-sm">Guardar</button>
-                <input type="number" step="1" min="0" name="cuota" value="{{ '%.0f'|format(variable.cuota) }}" aria-label="Cuota mensual de la hucha de viajes e imprevistos">
-              </form>
-              <span class="nota">la decides tú{% if not variable.elegida %} (sugerida){% endif %}</span>
-            </td>
-            <td class="num">{{ variable.inicial|eur }}</td>
-            <td class="muted">
-              {% for p in variable.picos[:5] %}{{ p.etiqueta.split(' · ')[-1] }} {{ p.nombre|lower }}: {{ p.importe|eur(0) }}{{ ", " if not loop.last }}{% endfor %}
-              <span class="nota">lo que no cupo en un mes normal; repetirlo costaría {{ variable.sugerida|eur(0) }}/mes.
-                Para arrancar, la avería más cara vista.</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="muted">El saldo de la {{ hs.cuenta }} se actualiza al entrar en ING desde
-         <a href="/inversiones/plan-ing">el plan de pensiones</a>.</p>
-      </details>
+    <section>
+      <h2>🐷 Huchas</h2>
+      <p>{{ huchas.cuota|eur }} al mes a la {{ huchas.cuenta }}{% if huchas.falta > 0 %}; faltan {{ huchas.falta|eur }} para arrancar{% endif %}.
+         Detalle y cuotas en <a href="/dinero#huchas">Mi dinero</a>.</p>
     </section>
   {% endif %}
 

@@ -12,7 +12,7 @@ Cada una tiene una cuota mensual y lo que debería haber hoy (`inicial`): para l
 lo justo para que con la cuota se llegue a cada uno a tiempo; para la variable, la avería
 más cara vista, para que la próxima no pille a cero (los viajes se ahorran antes).
 El saldo real es el de la Cuenta Naranja, que no da la conexión bancaria: se lee al entrar
-en ING (scripts/scrape_ing.py) y se guarda como valor declarado con el nombre CUENTA.
+en ING (scripts/scrape_ing.py) y se guarda como valor declarado con el nombre ACTIVO.
 """
 
 from datetime import date, timedelta
@@ -23,12 +23,14 @@ from app.models import Account, Bank, ManualAssetEntry, Transaction, UserSetting
 from app.services import anual_service
 
 CUENTA = "Cuenta Naranja"
+# Su valor declarado en /patrimonio (ya existía con este nombre antes de las huchas).
+ACTIVO = "ING Cuenta Naranja (ahorro)"
 NOMBRE_VARIABLE = "Viajes e imprevistos"
 DIAS_PAREJA = 3  # entre la salida de un traspaso y su llegada a otra cuenta conectada
 
 
 def saldo(db: Session) -> tuple[float | None, date | None]:
-    fila = (db.query(ManualAssetEntry).filter_by(name=CUENTA)
+    fila = (db.query(ManualAssetEntry).filter_by(name=ACTIVO)
             .order_by(ManualAssetEntry.recorded_at.desc()).first())
     return (float(fila.value), fila.recorded_at.date()) if fila else (None, None)
 
@@ -36,7 +38,7 @@ def saldo(db: Session) -> tuple[float | None, date | None]:
 def guardar_saldo(db: Session, valor: float) -> None:
     """Saldo de la Cuenta Naranja leído de la web de ING. No es líquido para el fondo de
     emergencia: todo él tiene dueño (las huchas)."""
-    db.add(ManualAssetEntry(name=CUENTA, value=round(valor, 2), liquido=False))
+    db.add(ManualAssetEntry(name=ACTIVO, value=round(valor, 2), liquido=False))
     db.commit()
 
 

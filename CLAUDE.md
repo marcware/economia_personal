@@ -209,6 +209,13 @@ Layout is a standard layered FastAPI app under `app/`:
   transfers without a matching incoming one in another account the app knows (ING's round-ups
   included). On `/presupuestos`, a variable category's overspend that meets those same thresholds is
   shown as paid by the hucha, not as "te has pasado".
+  [dinero_service.py](app/services/dinero_service.py) powers "Mi dinero" (`/dinero`): every account has
+  a job (`Account.rol`: NOMINA = Mediolanum, salary and emergency fund; RECIBOS; DIA; AHORRO = unassigned)
+  plus the Cuenta Naranja for the huchas. Each gets what it should hold (rest of the cycle's variable
+  budget, pending fixed costs and investment, 6 months of the budget's NECESIDAD plus annual bills, the
+  huchas' `inicial`) and the page lists the transfers that put everything in place, from AHORRO first.
+  Once accounts have roles, the home's "libre" only looks at DIA + RECIBOS. Mediolanum's balance is the
+  last imported extract's (`scripts/import_mediolanum.py` stores it as a declared asset).
   [pendientes_service.py](app/services/pendientes_service.py) builds the short "Pendiente" strip on the
   home page (budgets exceeded, hitos at risk, recent uncategorized movements, bank consent about to
   expire); it only counts and links, the arithmetic stays in `budget_service`/`goal_service`.

@@ -28,7 +28,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup, Category, Transaction
+from app.models import Account, AccountBalance, Bank, Budget, BudgetGroup, Category, RolCuenta, Transaction
 from app.services import anual_service, budget_service, huchas_service
 from app.services.dashboard_service import MONTHS_ES
 
@@ -109,13 +109,17 @@ def ciclo_nomina(db: Session, hoy: date | None = None) -> dict:
 
 
 def _saldo_cuentas(db: Session) -> tuple[float, date | None]:
-    """Suma del último saldo conocido de cada cuenta sincronizada por API.
+    """Suma del último saldo conocido de las cuentas del día a día.
 
-    Mediolanum queda fuera: su saldo es el colchón, se declara a mano en /patrimonio y
-    no es dinero para el día a día.
+    Con roles de cuenta (ver dinero_service), solo las de día a día y recibos: la de ahorro
+    y la de la nómina no son dinero para gastar. Sin roles, todas las sincronizadas por API
+    salvo Mediolanum, cuyo saldo es el colchón.
     """
     total, mas_antiguo = 0.0, None
-    for cuenta in db.query(Account).filter(Account.bank != Bank.MEDIOLANUM).all():
+    consulta = db.query(Account).filter(Account.bank != Bank.MEDIOLANUM)
+    if db.query(Account).filter(Account.rol.isnot(None)).first() is not None:
+        consulta = db.query(Account).filter(Account.rol.in_([RolCuenta.DIA, RolCuenta.RECIBOS]))
+    for cuenta in consulta.all():
         saldo = (
             db.query(AccountBalance)
             .filter_by(account_id=cuenta.id)
@@ -239,8 +243,11 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
 
     total_fijos = sum(f["pendiente"] for f in fijos)
     total_variables = sum(f["pendiente"] for f in variables_necesarios)
-    # Y, mientras no se haya hecho, lo que falta para que arranquen con lo que les toca.
-    comprometido = total_fijos + total_variables + inversion_pendiente + huchas_pendiente + h["falta"]
+    # Y, mientras no se haya hecho, lo que falta para que arranquen con lo que les toca; con
+    # roles de cuenta eso sale de la de ahorro, que no está en el saldo de arriba.
+    con_roles = db.query(Account).filter(Account.rol.isnot(None)).first() is not None
+    arranque = 0.0 if con_roles else h["falta"]
+    comprometido = total_fijos + total_variables + inversion_pendiente + huchas_pendiente + arranque
     libre = saldo - comprometido
     dias = max((ciclo["siguiente"] - hoy).days, 1)
 
@@ -266,6 +273,7 @@ def disponible(db: Session, hoy: date | None = None) -> dict:
         "huchas": h,
         "traspasado_huchas": traspasado_huchas,
         "huchas_pendiente": huchas_pendiente,
+        "arranque_huchas": arranque,
         "comprometido": comprometido,
         "libre": libre,
         "dias": dias,

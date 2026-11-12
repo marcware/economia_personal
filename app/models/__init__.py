@@ -1,4 +1,4 @@
-from app.models.account import Account, Bank
+from app.models.account import Account, Bank, RolCuenta
 from app.models.bank_connection import BankConnection, ConnectionStatus
 from app.models.budget import Budget
 from app.models.categorization_rule import AmountSign, CategorizationRule
@@ -17,6 +17,7 @@ __all__ = [
     "ManualLiabilityEntry",
     "Account",
     "Bank",
+    "RolCuenta",
     "BankConnection",
     "ConnectionStatus",
     "Budget",

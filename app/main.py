@@ -12,6 +12,7 @@ from app.routers import (
     categories,
     connections,
     dashboard,
+    dinero,
     inversiones,
     net_worth,
     notes,
@@ -39,6 +40,7 @@ app.include_router(categories.router)
 app.include_router(net_worth.router)
 app.include_router(inversiones.router)
 app.include_router(anual.router)
+app.include_router(dinero.router)
 
 
 @app.get("/", response_class=HTMLResponse)
